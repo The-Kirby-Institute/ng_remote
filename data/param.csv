@@ -1,0 +1,2 @@
+age_lower_bound,age_upper_bound,partner_burn_in,init_prob_exposed,init_duration_exposed,scenario,simulation_length,n_populations,n_parameter_sets
+16,35,3650,0.9,100,3,1825,100,10000

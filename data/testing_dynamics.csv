@@ -1,0 +1,2 @@
+test_sensitivity,p_treat_partner,p_treat_baseline,p_treat_intervention,delay_x0_baseline,delay_x1_baseline,delay_x0_intervention,delay_x1_intervention
+0.98,0.2394,0.857,0.968,0.1435889,5.7213689,0.3707642,-1.1867502

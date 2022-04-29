@@ -1,0 +1,3 @@
+sex,mean_rectal,var_rectal,symptoms_rectal,mean_urethral,var_urethral,symptoms_urethral,mean_pharyngeal,var_pharyngeal,symptoms_pharyngeal,latent_period,treatment_mean,treatment_var,immunity_mean,immunity_var,prob_import_infectious,prob_partner_treatment
+F,360,35,0.1,185,35,0.1,84,21,0,4,2.6,2.2,7,0.001,0.095,0.2
+M,360,35,0.1,185,35,0.3,84,21,0,4,2.6,2.2,7,0.001,0.095,0.2
