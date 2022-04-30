@@ -33,7 +33,7 @@ import src.vaccinations.vaccination as vax
 
 make_graphs = True
 run_mode = 'serial'
-scenario = 3
+scenario = 1
 
 
 #%% SETUP Parse simulation data
@@ -44,7 +44,7 @@ print('PARSING PARAMETERS\n------------------')
 sim_parameters, pop_parameters, prt_parameters, inf_parameters, meta, partner_expire, partner_matrix, population_no = \
     setup.setup_data(scenario = scenario,
                      run_mode = run_mode,
-                     inf_param_set = 'calibrated')
+                     inf_param_set = 'calibration')
 
 
 #%% SETUP Seed infections to ensure transmission
