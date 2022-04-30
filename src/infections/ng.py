@@ -564,7 +564,7 @@ def seek_treatment(pop_parameters, parameters, meta, partner_matrix, t):
             who = meta.loc[(meta.age_group == age) & (meta.gender == gender), :]
             test_time = who.test_time_last >= (t-365)
             test_reason = who.test_reason_last != int(2)
-            prop = ( np.sum(test_reason & test_time) )/len(who)
+            prop = ( np.sum(test_reason & test_time) )/max(len(who), 1)
             
             # Calculate the current shortfall proportion
             background = rates.prob[(rates.age_group == age) & (rates.gender == gender)].values[0] - prop

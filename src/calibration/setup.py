@@ -51,7 +51,8 @@ def run_one_simulation(scenario = 1, parameter_no = 0, run_mode = run_mode):
 
 
     # Setup simulation data
-    sim_parameters, pop_parameters, prt_parameters, inf_parameters, meta, partner_expire, partner_matrix, population_no = setup_data(scenario, parameter_no, run_mode)
+    sim_parameters, pop_parameters, prt_parameters, inf_parameters, meta, partner_expire, partner_matrix, population_no = \
+        setup_data(scenario, parameter_no, run_mode, 'calibration')
     
     
     # Check to see if this dataset has been run to completion
@@ -64,10 +65,11 @@ def run_one_simulation(scenario = 1, parameter_no = 0, run_mode = run_mode):
         t0_sim = sim_parameters.partner_burn_in[0]
         tt = range(t0_sim, t0_sim + sim_parameters.simulation_length[0])
         yt = np.zeros((len(tt), 5))
-        popt = np.zeros((len(tt), 5))
+        # popt = np.zeros((len(tt), 5))
         # part = np.zeros((len(tt), 2))
         inft = np.zeros((len(tt), 8))
         prvt = np.zeros((len(tt), 13))
+        tstt = np.zeros((len(tt), 9))
         
         
         #% Run the simulation
@@ -89,7 +91,7 @@ def run_one_simulation(scenario = 1, parameter_no = 0, run_mode = run_mode):
 
 
             # Update infection trackers
-            yt, popt, inft, prvt = update_tracking_data(meta, t - t0_sim, yt, popt, inft, prvt)
+            yt, inft, prvt, tstt = update_tracking_data(meta, t - t0_sim, yt, inft, prvt, tstt)
             
     
         # Progress
@@ -98,10 +100,9 @@ def run_one_simulation(scenario = 1, parameter_no = 0, run_mode = run_mode):
         
         # Make ouput graphs
         ( print('Making summary graphs') if run_mode == 'serial' else [] )
-        make_tracking_graphs(tt, parameter_no, yt, popt, inft, prvt, out_dir)
+        make_tracking_graphs(tt, parameter_no, yt, inft, prvt, tstt, out_dir)
         
         
-
         # Saving all environment variables
         ( print('Saving all environment variables') if run_mode == 'serial' else [] )
         del pop_parameters['lookup'], pop_parameters['imports'], pop_parameters['leavers']
@@ -118,9 +119,10 @@ def run_one_simulation(scenario = 1, parameter_no = 0, run_mode = run_mode):
                   'sim_parameters': sim_parameters,
                   't': t,
                   'yt': yt,
-                  'popt': popt,
+                  # 'popt': popt,
                   'inft': inft,
                   # 'prvt': prvt
+                  'tstt': tstt
                   }
         out_file = open(out_dir + '_output_environment.pkl', 'wb')
         pickle.dump(output, out_file)
@@ -141,7 +143,10 @@ def run_one_simulation(scenario = 1, parameter_no = 0, run_mode = run_mode):
             print('COMPLETE: scenario: ' + str(scenario) + ' - parameter set: ' + str(parameter_no) + ' - population: ' + str(population_no) + ' - runtime: ' + str(runtime) + ' min')
         else:
             print('Run completed in ' + str(runtime) + ' min\n')
-
+    
+    
+    # Done!
+    return None
 
 
 
@@ -156,6 +161,7 @@ def setup_data(scenario = 1, parameter_no = 0, run_mode = 'serial', inf_param_se
     
     # Read in global simulation parameters
     sim_parameters = pd.read_csv('data/param.csv')
+    sim_parameters.loc[:, 'simulation_length'] = sim_parameters.loc[0, 'simulation_length_' + str(scenario)]
     
     
     # Read in demographic parameters
@@ -403,6 +409,9 @@ def parse_calibration_transmission_parameters(calib_param, parameter_no, set):
     parameters['trans_kiss'] = trans_kiss
     parameters['trans_sex'] = trans_sex
     parameters['trans_rim'] = trans_rim
+    parameters['infection'].loc[:, 'symptoms_rectal'] = calib_param['symptoms_rectal']
+    parameters['infection'].loc[0, 'symptoms_urethral'] = calib_param['symptoms_ural_male']
+    parameters['infection'].loc[1, 'symptoms_urethral'] = calib_param['symptoms_ural_female']
 
 
     # Return the parameters in dictionary form
@@ -464,7 +473,7 @@ def parse_population_data(scenario = 1, population_no = 0, run_mode = run_mode):
 # A function which updates the arrays used to track transmission
 #
 #
-def update_tracking_data(meta, t, yt, popt, inft, prvt):
+def update_tracking_data(meta, t, yt, inft, prvt, tstt):
     
     
     # Compute the current population size
@@ -479,12 +488,12 @@ def update_tracking_data(meta, t, yt, popt, inft, prvt):
                sum(meta.state == 'T')/n]
     
     
-    # Compute number of individuals in each age group
-    popt[t,:] = [sum(meta.age_group == 0),
-                sum(meta.age_group == 1),
-                sum(meta.age_group == 2),
-                sum(meta.age_group == 3),
-                n]
+    # # Compute number of individuals in each age group
+    # popt[t,:] = [sum(meta.age_group == 0),
+    #             sum(meta.age_group == 1),
+    #             sum(meta.age_group == 2),
+    #             sum(meta.age_group == 3),
+    #             n]
     
     
     # # Compute the total number of long-term relationships
@@ -508,23 +517,38 @@ def update_tracking_data(meta, t, yt, popt, inft, prvt):
     
     # Compute comparisons to STRIVE data - prevalence of urethral infections by sub-populations
     I = meta.state == 'I'
+    males = meta.gender == 1
     prvt[t,:] = [sum(I)/n,
-                 sum(I & (meta.gender == 1))/sum(meta.gender == 1),
-                 sum(I & (meta.gender == 0))/sum(meta.gender == 0),
-                 sum(I & (meta.gender == 1) & (meta.age_group == 0))/max(1, sum( (meta.gender == 1) & (meta.age_group == 0) ) ),
-                 sum(I & (meta.gender == 1) & (meta.age_group == 1))/max(1, sum( (meta.gender == 1) & (meta.age_group == 1) ) ),
-                 sum(I & (meta.gender == 1) & (meta.age_group == 2))/max(1, sum( (meta.gender == 1) & (meta.age_group == 2) ) ),
-                 sum(I & (meta.gender == 1) & (meta.age_group == 3) & (meta.age < 35))/max(1, sum( (meta.gender == 1) & (meta.age_group == 3) & (meta.age < 35) )),
-                 sum(I & (meta.gender == 1) & (meta.age_group == 3) & (meta.age > 35))/max(1, sum( (meta.gender == 1) & (meta.age_group == 3) & (meta.age > 35) )),
-                 sum(I & (meta.gender == 0) & (meta.age_group == 0))/max(1, sum( (meta.gender == 0) & (meta.age_group == 0) ) ),
-                 sum(I & (meta.gender == 0) & (meta.age_group == 1))/max(1, sum( (meta.gender == 0) & (meta.age_group == 1) ) ),
-                 sum(I & (meta.gender == 0) & (meta.age_group == 2))/max(1, sum( (meta.gender == 0) & (meta.age_group == 2) ) ),
-                 sum(I & (meta.gender == 0) & (meta.age_group == 3) & (meta.age < 35))/max(1, sum( (meta.gender == 0) & (meta.age_group == 3) & (meta.age < 35) )),
-                 sum(I & (meta.gender == 0) & (meta.age_group == 3) & (meta.age > 35))/max(1, sum( (meta.gender == 0) & (meta.age_group == 3) & (meta.age > 35) ))]
+                 sum(I & (males))/sum(males),
+                 sum(I & (~males))/sum(~males),
+                 sum(I & (males) & (meta.age_group == 0))/max(1, sum( (meta.gender == 1) & (meta.age_group == 0) ) ),
+                 sum(I & (males) & (meta.age_group == 1))/max(1, sum( (meta.gender == 1) & (meta.age_group == 1) ) ),
+                 sum(I & (males) & (meta.age_group == 2))/max(1, sum( (meta.gender == 1) & (meta.age_group == 2) ) ),
+                 sum(I & (males) & (meta.age_group == 3) & (meta.age < 35))/max(1, sum( (males) & (meta.age_group == 3) & (meta.age < 35) )),
+                 sum(I & (males) & (meta.age_group == 3) & (meta.age > 35))/max(1, sum( (males) & (meta.age_group == 3) & (meta.age > 35) )),
+                 sum(I & (~males) & (meta.age_group == 0))/max(1, sum( (~males) & (meta.age_group == 0) ) ),
+                 sum(I & (~males) & (meta.age_group == 1))/max(1, sum( (~males) & (meta.age_group == 1) ) ),
+                 sum(I & (~males) & (meta.age_group == 2))/max(1, sum( (~males) & (meta.age_group == 2) ) ),
+                 sum(I & (~males) & (meta.age_group == 3) & (meta.age < 35))/max(1, sum( (~males) & (meta.age_group == 3) & (meta.age < 35) )),
+                 sum(I & (~males) & (meta.age_group == 3) & (meta.age > 35))/max(1, sum( (~males) & (meta.age_group == 3) & (meta.age > 35) ))]
+    
+    
+    # Compute the proportion of the population who have tested in the last 365 days
+    tested = meta.test_time_last >= (t-365)
+    tstt[t,:] = [np.sum(tested) / n,
+                 np.sum(males & tested & (meta.test_reason_last == int(1))) / np.sum(males),
+                 np.sum(males & tested & (meta.test_reason_last == int(2))) / np.sum(males),
+                 np.sum(males & tested & (meta.test_reason_last == int(3))) / np.sum(males),
+                 np.sum(males & tested) / np.sum(males),
+                 np.sum(~males & tested & (meta.test_reason_last == int(1))) / np.sum(~males),
+                 np.sum(~males & tested & (meta.test_reason_last == int(2))) / np.sum(~males),
+                 np.sum(~males & tested & (meta.test_reason_last == int(3))) / np.sum(~males),
+                 np.sum(~males & tested) / np.sum(~males),
+                 ]
     
     
     # Done
-    return yt, popt, inft, prvt
+    return yt, inft, prvt, tstt
 
 
 
@@ -535,7 +559,7 @@ def update_tracking_data(meta, t, yt, popt, inft, prvt):
 # Makes graphs
 #
 #
-def make_tracking_graphs(tt, sim, yt, popt, inft, prvt, out_dir):
+def make_tracking_graphs(tt, sim, yt, inft, prvt, tstt, out_dir):
 
 
     # Plot aggregate infection levels
@@ -554,19 +578,19 @@ def make_tracking_graphs(tt, sim, yt, popt, inft, prvt, out_dir):
     plt.close(new_fig)
 
 
-    # Plot the number in each age group
-    new_fig = plt.figure(figsize = [12, 8])
-    plt.plot(tt, popt[:,0], label = '16-19')
-    plt.plot(tt, popt[:,1], label = '20-24')
-    plt.plot(tt, popt[:,2], label = '25-30')
-    plt.plot(tt, popt[:,3], label = 'Over 30')
-    plt.plot(tt, np.sum(popt, axis = 1), label = 'Total')
-    plt.title('Number of People in Each Age Group (Parameter Set ' + str(sim) +')')
-    plt.xlabel('Global Simulation Timestep')
-    plt.ylabel('Number of Individuals')
-    plt.legend()
-    plt.savefig(out_dir + '_graph_age_group.png')
-    plt.close()
+    # # Plot the number in each age group
+    # new_fig = plt.figure(figsize = [12, 8])
+    # plt.plot(tt, popt[:,0], label = '16-19')
+    # plt.plot(tt, popt[:,1], label = '20-24')
+    # plt.plot(tt, popt[:,2], label = '25-30')
+    # plt.plot(tt, popt[:,3], label = 'Over 30')
+    # plt.plot(tt, np.sum(popt, axis = 1), label = 'Total')
+    # plt.title('Number of People in Each Age Group (Parameter Set ' + str(sim) +')')
+    # plt.xlabel('Global Simulation Timestep')
+    # plt.ylabel('Number of Individuals')
+    # plt.legend()
+    # plt.savefig(out_dir + '_graph_age_group.png')
+    # plt.close()
 
 
     # # Plot the number in a long term relationship
@@ -703,6 +727,56 @@ def make_tracking_graphs(tt, sim, yt, popt, inft, prvt, out_dir):
     # Save output
     plt.savefig(out_dir + '_graph_prevalence_age_group.png')
     plt.close()
+    
+    
+    ## PLOT OF TESTING
+    
+    
+    # Overall testing rates
+    tstt = tstt * 100
+    fig, axs = plt.subplots(3, 1)
+    fig.tight_layout(rect=[0, 0.03, 1, 0.95])
+    plt.suptitle('Overall Testing Rates Compared to Mean Testing Rates in STRIVE (Parameter Set ' + str(sim) + ')')
+    
+    
+    # Overall
+    axs[0].plot(tt, tstt[:,0], label = 'Simulated')
+    axs[0].plot(tt, len(tt) * [17.6], color = 'black', linestyle = '--', label = 'STRIVE')
+    axs[0].set_title('Overall Prevalence')
+    axs[0].legend()
+    
+    
+    # Males
+    axs[1].plot(tt, tstt[:,4], label = 'Overall')
+    axs[1].plot(tt, tstt[:,1], label = 'Symptoms')
+    axs[1].plot(tt, tstt[:,2], label = 'Background')
+    axs[1].plot(tt, tstt[:,3], label = 'Contact Tracing')
+    axs[1].plot(tt, len(tt) * [13.4], color = 'black', linestyle = '--')
+    axs[1].set_title('Testing Rates Amongst Males by Reason for Last Test')
+    
+    
+    # Females
+    axs[2].plot(tt, tstt[:,8], label = 'Overall')
+    axs[2].plot(tt, tstt[:,5], label = 'Symptoms')
+    axs[2].plot(tt, tstt[:,6], label = 'Background')
+    axs[2].plot(tt, tstt[:,7], label = 'Contact Tracing')
+    axs[2].plot(tt, len(tt) * [21.8], color = 'black', linestyle = '--')
+    axs[2].set_title('Testing Rates Amongst Females by Reason for Last Test')
+    
+    
+    # Labels
+    axs[2].set_xlabel('Global Simulation Timestep')
+    axs[1].set_ylabel('Proportion of Sub-Population (%)')
+    axs[1].legend()
+    
+    
+    # Save output
+    plt.savefig(out_dir + '_graph_testing_rates.png')
+    plt.close()
+
+
+    # Done
+    return None
     
     
 

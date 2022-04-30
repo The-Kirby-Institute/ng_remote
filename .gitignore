@@ -1,3 +1,19 @@
+# Stuff to ignore
+simulations/calibration/
+simulations/partnerships/
+simulations/populations/
+graphs/
+documents/
+data/2016_ATSIP_ILOC_for_AUS_short-header/
+data/2016_ILOC_shape/
+data/2016_RA_shape/
+data/2016_SUA_shape/
+data/2016_UCL_shape/
+data/turnover/
+
+
+
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

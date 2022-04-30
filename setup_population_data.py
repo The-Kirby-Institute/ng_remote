@@ -268,7 +268,25 @@ if (__name__ == '__main__') & (generate_parameters == True):
     # mean_phar = 84
     # var_phar = 21
     # symptoms_phar = 0
+    
 
+    # Probability of seeking treatment given a rectal infection
+    # Assumed to be the same distribution for a female urogenital infection
+    m = 0.05
+    v = 0.001
+    alpha = ((m*(1-m)/v - 1)) * m
+    beta = ((m*(1-m)/v - 1)) * (1 - m)
+    symptoms_rectal = np.random.beta(alpha, beta, n_sim)
+    symptoms_ural_female = np.random.beta(alpha, beta, n_sim)
+    
+    
+    # Probability of a male seeking treatment given a urogenetal infection
+    m = 0.3
+    v = 0.02
+    alpha = ((m*(1-m)/v - 1)) * m
+    beta = ((m*(1-m)/v - 1)) * (1 - m)
+    symptoms_ural_male = np.random.beta(alpha, beta, n_sim)
+    
 
     # Probabilities of transmission given a sexual event
     pru = np.random.random(n_sim)
@@ -312,13 +330,13 @@ if (__name__ == '__main__') & (generate_parameters == True):
                                     # 'latent_period': latent_period,
                                     # 'mean_rectal': mean_rectal,
                                     # 'var_rectal': var_rectal,
-                                    # 'symptoms_rectal': symptoms_rectal,
+                                    'symptoms_rectal': symptoms_rectal,
                                     # 'mean_ural_male': mean_ural_male,
                                     # 'var_ural_male': var_ural_male,
-                                    # 'symptoms_ural_male': symptoms_ural_male,
+                                    'symptoms_ural_male': symptoms_ural_male,
                                     # 'mean_ural_female': mean_ural_female,
                                     # 'var_ural_female': var_ural_female,
-                                    # 'symptoms_ural_female': symptoms_ural_female,
+                                    'symptoms_ural_female': symptoms_ural_female,
                                     # 'mean_phar': mean_phar,
                                     # 'var_phar': var_phar,
                                     # 'symptoms_phar': symptoms_phar,
@@ -374,7 +392,29 @@ if (__name__ == '__main__') & (generate_parameters == True):
 
 
 
+#%%  TEST DISTRIBUTIONS
 
+
+# # Distribution for probability of testing rectal infection
+# m = 0.05
+# v = 0.001
+
+# alpha = ((m*(1-m)/v - 1)) * m
+# beta = ((m*(1-m)/v - 1)) * (1 - m)
+
+# x = np.random.beta(alpha, beta, 10000)
+# plt.hist(x)
+
+
+# # Distribution for probability of testing rectal infection
+# m = 0.3
+# v = 0.02
+
+# alpha = ((m*(1-m)/v - 1)) * m
+# beta = ((m*(1-m)/v - 1)) * (1 - m)
+
+# x = np.random.beta(alpha, beta, 10000)
+# plt.hist(x)
 
 
 
