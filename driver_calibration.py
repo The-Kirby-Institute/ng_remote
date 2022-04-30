@@ -64,7 +64,7 @@ def worker(it):
 
 # Define function for handling the parallel pool
 def pool_handler():
-    p = Pool(30)
+    p = Pool(25)
     p.map(worker, sim_parameters)
 
 

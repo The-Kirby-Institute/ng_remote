@@ -74,8 +74,8 @@ def run_one_simulation(scenario = 1, parameter_no = 0, run_mode = run_mode):
         
         #% Run the simulation
         ( print('\nRunning simulation...\n') if run_mode == 'serial' else [] )
-        for t in tqdm.tqdm(tt):
-        # for t in tt:
+        # for t in tqdm.tqdm(tt):
+        for t in tt:
 
 
             # Update population
@@ -536,13 +536,13 @@ def update_tracking_data(meta, t, yt, inft, prvt, tstt):
     # Compute the proportion of the population who have tested in the last 365 days
     tested = meta.test_time_last >= (t-365)
     tstt[t,:] = [np.sum(tested) / n,
-                 np.sum(males & tested & (meta.test_reason_last == int(1))) / np.sum(males),
-                 np.sum(males & tested & (meta.test_reason_last == int(2))) / np.sum(males),
-                 np.sum(males & tested & (meta.test_reason_last == int(3))) / np.sum(males),
+                 np.sum((males & tested) & (meta.test_reason_last == int(1))) / np.sum(males),
+                 np.sum((males & tested) & (meta.test_reason_last == int(2))) / np.sum(males),
+                 np.sum((males & tested) & (meta.test_reason_last == int(3))) / np.sum(males),
                  np.sum(males & tested) / np.sum(males),
-                 np.sum(~males & tested & (meta.test_reason_last == int(1))) / np.sum(~males),
-                 np.sum(~males & tested & (meta.test_reason_last == int(2))) / np.sum(~males),
-                 np.sum(~males & tested & (meta.test_reason_last == int(3))) / np.sum(~males),
+                 np.sum((~males & tested) & (meta.test_reason_last == int(1))) / np.sum(~males),
+                 np.sum((~males & tested) & (meta.test_reason_last == int(2))) / np.sum(~males),
+                 np.sum((~males & tested) & (meta.test_reason_last == int(3))) / np.sum(~males),
                  np.sum(~males & tested) / np.sum(~males),
                  ]
     

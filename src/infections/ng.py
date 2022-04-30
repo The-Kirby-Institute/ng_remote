@@ -568,7 +568,7 @@ def seek_treatment(pop_parameters, parameters, meta, partner_matrix, t):
             
             # Calculate the current shortfall proportion
             background = rates.prob[(rates.age_group == age) & (rates.gender == gender)].values[0] - prop
-            background = max(0, background/(365/3))
+            background = max(0, background/(3*365))
             
             # Sample new people to test
             who_test = who.index[test_time == False]
