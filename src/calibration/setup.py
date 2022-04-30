@@ -57,7 +57,7 @@ def run_one_simulation(scenario = 1, parameter_no = 0, run_mode = run_mode):
     
     # Check to see if this dataset has been run to completion
     out_dir = 'simulations/calibration/scenario_' + str(scenario) +'/simulation_' + str(parameter_no)
-    last_file = out_dir + '_prevalence.png'
+    last_file = out_dir + '_output_meta.ftr'
     if os.path.exists(last_file) == False:
         
         
@@ -410,8 +410,8 @@ def parse_calibration_transmission_parameters(calib_param, parameter_no, set):
     parameters['trans_sex'] = trans_sex
     parameters['trans_rim'] = trans_rim
     parameters['infection'].loc[:, 'symptoms_rectal'] = calib_param['symptoms_rectal']
-    parameters['infection'].loc[0, 'symptoms_urethral'] = calib_param['symptoms_ural_male']
-    parameters['infection'].loc[1, 'symptoms_urethral'] = calib_param['symptoms_ural_female']
+    parameters['infection'].loc[1, 'symptoms_urethral'] = calib_param['symptoms_ural_male']
+    parameters['infection'].loc[0, 'symptoms_urethral'] = calib_param['symptoms_ural_female']
 
 
     # Return the parameters in dictionary form
