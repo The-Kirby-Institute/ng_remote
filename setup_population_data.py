@@ -272,20 +272,23 @@ if (__name__ == '__main__') & (generate_parameters == True):
 
     # Probability of seeking treatment given a rectal infection
     # Assumed to be the same distribution for a female urogenital infection
-    m = 0.05
-    v = 0.001
-    alpha = ((m*(1-m)/v - 1)) * m
-    beta = ((m*(1-m)/v - 1)) * (1 - m)
-    symptoms_rectal = np.random.beta(alpha, beta, n_sim)
-    symptoms_ural_female = np.random.beta(alpha, beta, n_sim)
+    # m = 0.05
+    # v = 0.001
+    # alpha = ((m*(1-m)/v - 1)) * m
+    # beta = ((m*(1-m)/v - 1)) * (1 - m)
+    # symptoms_rectal = np.random.beta(alpha, beta, n_sim)
+    # symptoms_ural_female = np.random.beta(alpha, beta, n_sim)
+    symptoms_rectal = np.random.random(n_sim)
+    symptoms_ural_female = np.random.random(n_sim)
     
     
     # Probability of a male seeking treatment given a urogenetal infection
-    m = 0.3
-    v = 0.02
-    alpha = ((m*(1-m)/v - 1)) * m
-    beta = ((m*(1-m)/v - 1)) * (1 - m)
-    symptoms_ural_male = np.random.beta(alpha, beta, n_sim)
+    # m = 0.09
+    # v = 0.002
+    # alpha = ((m*(1-m)/v - 1)) * m
+    # beta = ((m*(1-m)/v - 1)) * (1 - m)
+    # symptoms_ural_male = np.random.beta(alpha, beta, n_sim)
+    symptoms_ural_male = np.random.random(n_sim)
     
 
     # Probabilities of transmission given a sexual event
@@ -407,8 +410,8 @@ if (__name__ == '__main__') & (generate_parameters == True):
 
 
 # # Distribution for probability of testing rectal infection
-# m = 0.3
-# v = 0.02
+# m = 0.09
+# v = 0.002
 
 # alpha = ((m*(1-m)/v - 1)) * m
 # beta = ((m*(1-m)/v - 1)) * (1 - m)

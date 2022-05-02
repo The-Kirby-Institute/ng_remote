@@ -24,16 +24,18 @@ import matplotlib.pyplot as plt
 #
 def update_infections(pop_parameters, inf_parameters, meta, partner_matrix, t):
 
+    
     # Implement a transmission event
-    meta = new_infections(pop_parameters, inf_parameters,
-                          meta, partner_matrix, t)
+    meta = new_infections(pop_parameters, inf_parameters, meta, partner_matrix, t)
+
 
     # Update infectious states
     meta = progress_state_of_infection(meta, t)
 
+
     # Implement treatment
-    meta = seek_treatment(pop_parameters, inf_parameters,
-                          meta, partner_matrix, t)
+    meta = seek_treatment(pop_parameters, inf_parameters, meta, partner_matrix, t)
+
 
     return meta
 
@@ -367,30 +369,23 @@ def new_infections(pop_parameters, inf_parameters, meta, partner_matrix, t,
                     if k == 0:
 
                         # Infection at rectum
-                        meta.at[j, "site0_t1"] = end_latent + duration_mod['site0'](
-                            vax_parameters, meta, j) * duration_rectal(inf_parameters, infectee)
-                        meta.at[j, 'site0_symptoms'] = symptoms_prob['site0'](
-                            inf_parameters, vax_parameters, meta, i, j)
+                        meta.at[j, "site0_t1"] = end_latent + duration_mod['site0'](vax_parameters, meta, j) * duration_rectal(inf_parameters, infectee)
+                        meta.at[j, 'site0_symptoms'] = symptoms_prob['site0'](inf_parameters, vax_parameters, meta, i, j)
 
                     elif k == 1:
 
                         # Infection at pharynx
-                        meta.at[j, "site1_t1"] = end_latent + duration_mod['site1'](
-                            vax_parameters, meta, j) * duration_urethral(inf_parameters, infectee)
-                        meta.at[j, 'site1_symptoms'] = symptoms_prob['site1'](
-                            inf_parameters, vax_parameters, meta, i, j)
+                        meta.at[j, "site1_t1"] = end_latent + duration_mod['site1'](vax_parameters, meta, j) * duration_urethral(inf_parameters, infectee)
+                        meta.at[j, 'site1_symptoms'] = symptoms_prob['site1'](inf_parameters, vax_parameters, meta, i, j)
 
                     else:
 
                         # Infection at urethra
-                        meta.at[j, "site2_t1"] = end_latent + duration_mod['site2'](
-                            vax_parameters, meta, j) * duration_pharyngeal(inf_parameters, infectee)
-                        meta.at[j, 'site2_symptoms'] = symptoms_prob['site2'](
-                            inf_parameters, vax_parameters, meta, i, j)
+                        meta.at[j, "site2_t1"] = end_latent + duration_mod['site2'](vax_parameters, meta, j) * duration_pharyngeal(inf_parameters, infectee)
+                        meta.at[j, 'site2_symptoms'] = symptoms_prob['site2'](inf_parameters, vax_parameters, meta, i, j)
 
                     # Set delay from symptoms to treatment
-                    symptoms = meta.at[j, 'site0_symptoms'] | meta.at[j,
-                                                                      'site1_symptoms'] | meta.at[j, 'site2_symptoms']
+                    symptoms = meta.at[j, 'site0_symptoms'] | meta.at[j, 'site1_symptoms'] | meta.at[j, 'site2_symptoms']
                     if symptoms:
 
                         # Pull the time of test from Gamma CDF
@@ -401,16 +396,13 @@ def new_infections(pop_parameters, inf_parameters, meta, partner_matrix, t,
                         meta.loc[j, 'test_time'] = end_latent + test_delay
 
                         # Decide whether they'll get treated
-                        p_treat = pop_parameters['testing_param'].test_sensitivity[0] * \
-                            pop_parameters['testing_param'].p_treat_baseline[0]
+                        p_treat = pop_parameters['testing_param'].test_sensitivity[0] * pop_parameters['testing_param'].p_treat_baseline[0]
                         if np.random.random(1)[0] < p_treat:
 
                             # Sample a treatment delay
                             u = np.random.random(1)[0]
-                            treat_delay = delay_test_to_treatment(
-                                pop_parameters, 1)
-                            meta.loc[j, 'treatment_time'] = meta.loc[j,
-                                                                     'test_time'] + treat_delay
+                            treat_delay = delay_test_to_treatment(pop_parameters, 1)
+                            meta.loc[j, 'treatment_time'] = meta.loc[j, 'test_time'] + treat_delay
 
     # Return meta
     return meta
@@ -524,8 +516,10 @@ def seek_treatment(pop_parameters, parameters, meta, partner_matrix, t):
     meta.loc[test_symptoms, 'test_time'] = float('Inf')
     meta.loc[test_symptoms, 'test_time_last'] = t
     meta.loc[test_symptoms, 'test_reason_last'] = int(1)
-
+    
+    
     # BACKGROUND TESTING
+
 
     # Determine if anyone is to get background tested today
     test_background = np.array(list(), dtype='int64')
@@ -533,39 +527,41 @@ def seek_treatment(pop_parameters, parameters, meta, partner_matrix, t):
     for age in [0, 1, 2, 3, 4]:
         for gender in [0, 1]:
 
+            
             # Count up the proportion of the population that has been tested in the last 12 months
-            who = meta.loc[(meta.age_group == age) &
-                           (meta.gender == gender), :]
-            test_time = who.test_time_last >= (t-365)
+            who = meta.loc[(meta.age_group == age) & (meta.gender == gender), :]
+            last_365 = (t - who.test_time_last) <= 365
             # test_reason = who.test_reason_last != int(2)
             # prop = (np.sum(test_reason & test_time))/max(len(who), 1)
-            prop = (np.sum(test_time))/max(len(who), 1)
+            prop = (np.sum(last_365))/max(len(who), 1)
+
 
             # Calculate the current shortfall proportion
-            background = rates.prob[(rates.age_group == age) & (
-                rates.gender == gender)].values[0] - prop
-            background = max(0, background/(3*365))
+            background = rates.prob[(rates.age_group == age) & (rates.gender == gender)].values[0] - prop
+            background = max(0, background/(7))
+
 
             # Sample new people to test
-            who_test = who.index[test_time == False]
-            test_background = np.append(
-                test_background, who_test[np.random.random(len(who_test)) <= background])
+            who_test = who.index[last_365 == False]
+            who_test = who_test[np.random.random(len(who_test)) <= background]
+            test_background = np.append(test_background, who_test)
+
 
     # Decide if any will be treated
-    p_treat = pop_parameters['testing_param'].test_sensitivity[0] * \
-        pop_parameters['testing_param'].p_treat_baseline[0]
-    treat_background = (meta.state[test_background] == 'I') & (
-        np.random.random(len(test_background)) <= p_treat)
+    p_treat = pop_parameters['testing_param'].test_sensitivity[0] * pop_parameters['testing_param'].p_treat_baseline[0]
+    treat_background = (meta.state[test_background] == 'I') & (np.random.random(len(test_background)) <= p_treat)
     treat_background = test_background[treat_background]
+
 
     # Update data for background testing and treatment
     meta.loc[test_background, 'test_time'] = float('Inf')
     meta.loc[test_background, 'test_time_last'] = t
     meta.loc[test_background, 'test_reason_last'] = int(2)
-    meta.loc[treat_background, 'treatment_time'] = t + \
-        delay_test_to_treatment(pop_parameters, len(treat_background))
+    meta.loc[treat_background, 'treatment_time'] = t + delay_test_to_treatment(pop_parameters, len(treat_background))
+
 
     # CONTACT TRACING
+
 
     # Pull out the partners of everybody tested today
     test = np.append(test_symptoms, test_background)
@@ -656,7 +652,7 @@ def initilise_infection_trackers(n_days):
 #
 #
 #
-def update_infection_trackers(t, pop_parameters, meta, inf_tracker):
+def update_infection_trackers(t, pop_parameters, meta, inf_tracker, t0_sim):
 
     # Update population size trackers
     temp1 = inf_tracker['pop_size_age_risk']
@@ -784,7 +780,7 @@ def update_infection_trackers(t, pop_parameters, meta, inf_tracker):
 
             # Track people currently in the population
             who = meta.loc[(meta.age_group == a) & (meta.gender == g), :]
-            last_365 = who.test_time_last >= (t-365)
+            last_365 = (t+t0_sim - who.test_time_last) <= 365
             in_count1 = np.sum(last_365 & (who.test_reason_last == int(1)))
             in_count2 = np.sum(last_365 & (who.test_reason_last == int(2)))
             in_count3 = np.sum(last_365 & (who.test_reason_last == int(3)))
@@ -1052,18 +1048,12 @@ def make_infection_graphs(tt, inf_tracker, pop_parameters, save_loc='graphs/outp
     ii = 0
     for age in [0, 1, 2, 3, 4]:
         for l2 in [0, 1]:
-            target = rates.prob[(rates.age_group == age) &
-                                (rates.gender == l2)].values[0]
-            ax[age, l2].plot(tt, len(tt) * [100 * target], linestyle='--',
-                             label='STRIVE Baseline Proportion', color=cmap(0))
-            ax[age, l2].plot(tt, 100 * it[:, ii],
-                             label='Overall Testing', color=cmap(0))
-            ax[age, l2].plot(tt, 100 * it[:, ii+1],
-                             label='Symptoms', color=cmap(1))
-            ax[age, l2].plot(tt, 100 * it[:, ii+2],
-                             label='Background', color=cmap(2))
-            ax[age, l2].plot(tt, 100 * it[:, ii+3],
-                             label='Contact Tracing', color=cmap(3))
+            target = rates.prob[(rates.age_group == age) & (rates.gender == l2)].values[0]
+            ax[age, l2].plot(tt, len(tt) * [100 * target], linestyle='--', label='STRIVE Baseline Proportion', color=cmap(0))
+            ax[age, l2].plot(tt, 100 * it[:, ii], label='Overall Testing', color=cmap(0))
+            ax[age, l2].plot(tt, 100 * it[:, ii+1], label='Symptoms', color=cmap(1))
+            ax[age, l2].plot(tt, 100 * it[:, ii+2], label='Background', color=cmap(2))
+            ax[age, l2].plot(tt, 100 * it[:, ii+3], label='Contact Tracing', color=cmap(3))
             ii = ii + 4
 
     # Labels
@@ -1083,6 +1073,5 @@ def make_infection_graphs(tt, inf_tracker, pop_parameters, save_loc='graphs/outp
                     bbox_to_anchor=(-0.1, -0.2), fancybox=True)
 
     # Save graph
-    fig.savefig(
-        save_loc + 'infections_testing_rates_by_age_gender_and_reason.png', dpi=200)
+    fig.savefig(save_loc + 'infections_testing_rates_by_age_gender_and_reason.png', dpi=200)
     plt.close(fig)

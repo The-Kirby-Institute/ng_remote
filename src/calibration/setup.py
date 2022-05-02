@@ -19,6 +19,7 @@ import shutil
 import os
 import time
 import matplotlib.pyplot as plt
+import re
 
 
 # My modules
@@ -91,7 +92,7 @@ def run_one_simulation(scenario = 1, parameter_no = 0, run_mode = run_mode):
 
 
             # Update infection trackers
-            yt, inft, prvt, tstt = update_tracking_data(meta, t - t0_sim, yt, inft, prvt, tstt)
+            yt, inft, prvt, tstt = update_tracking_data(meta, t - t0_sim, yt, inft, prvt, tstt, t0_sim)
             
     
         # Progress
@@ -162,7 +163,7 @@ def setup_data(scenario = 1, parameter_no = 0, run_mode = 'serial', inf_param_se
     # Read in global simulation parameters
     sim_parameters = pd.read_csv('data/param.csv')
     sim_parameters.loc[:, 'simulation_length'] = sim_parameters.loc[0, 'simulation_length_' + str(scenario)]
-    
+        
     
     # Read in demographic parameters
     pop_parameters = pop.setup_data(scenario = scenario,
@@ -182,10 +183,12 @@ def setup_data(scenario = 1, parameter_no = 0, run_mode = 'serial', inf_param_se
     
     
     # Setup simulation population
-    population_no = random.randint(0, sim_parameters.n_populations[0]-1)
-    meta, partner_expire, partner_matrix = setup.parse_population_data(scenario = scenario, 
-                                                                       population_no = population_no,
-                                                                       run_mode = run_mode)
+    meta, partner_expire, partner_matrix, population_no = \
+                    setup.parse_population_data(scenario = scenario, 
+                                                run_mode = run_mode,
+                                                pop_set = inf_param_set,
+                                                inf_parameters = inf_parameters,
+                                                sim_parameters = sim_parameters)
     
     
     # Preallocate importations
@@ -193,7 +196,7 @@ def setup_data(scenario = 1, parameter_no = 0, run_mode = 'serial', inf_param_se
                                                          inf_parameters, 
                                                          meta, 
                                                          partner_matrix, 
-                                                         sim_parameters.partner_burn_in[0])
+                                                         0)
     
         
     # Done
@@ -237,6 +240,11 @@ def setup_transmission_parameters(set = 'default', scenario = 3, parameter_no = 
         # Format the parameters
         ( print('Infection parameters: calibration set ' + str(parameter_no)) if run_mode == 'serial' else [] )
         parameters = parse_calibration_transmission_parameters(calib_param, parameter_no, set)
+        
+        
+        # uPDATE SET NO
+        parameters['set'] = 'calibration'
+        parameters['parameter_no'] = parameter_no
 
     
     # This will read in a specific set of calibration parameters
@@ -245,14 +253,20 @@ def setup_transmission_parameters(set = 'default', scenario = 3, parameter_no = 
         
         # Read in the calibrated parameters
         # calib_param = pd.read_csv('simulations/calibrated_scenario_' + str(scenario) + '.csv')
-        calib_param = pd.read_csv('simulations/calibrated_scenario_3.csv')
+        calib_param = pd.read_csv('simulations/calibrated_scenario_' + str(scenario) + '.csv')
         parameter_no = np.random.choice(len(calib_param), 1)[0]
         calib_param = calib_param.iloc[parameter_no,:]
 
 
         # Format the parameters
-        ( print('Infection parameters: calibrated set ' + str(parameter_no)) if run_mode == 'serial' else [] )
+        ( print('Infection parameters: calibrated (' + str(parameter_no) + ')') if run_mode == 'serial' else [] )
         parameters = parse_calibration_transmission_parameters(calib_param, parameter_no, set)
+        
+        
+        # Update the parameter set
+        parameters['set'] = 'calibrated'
+        parameters['calibrated_no'] = parameter_no
+        parameters['parameter_no'] = int(calib_param.set)
 
 
     return parameters
@@ -361,10 +375,6 @@ def parse_calibration_transmission_parameters(calib_param, parameter_no, set):
     parameters = parse_default_transmission_parameters()
     
     
-    # Update the parameter set
-    parameters['set'] = [set + ' set ' + str(parameter_no)]
-    
-    
     # Form the site-to-site transmission probability matrix for convenience.
     # Read as the probability of transmission from site i to site j
     # Sites are in the order: rectal, urethral, pharangeal
@@ -426,43 +436,70 @@ def parse_calibration_transmission_parameters(calib_param, parameter_no, set):
 # A function which loads in a set of population data
 #
 #
-def parse_population_data(scenario = 1, population_no = 0, run_mode = run_mode):
-
-
-    # Read in a specific set
-    ( print('Population set: ' + str(population_no), flush = True) if run_mode == 'serial' else [] )
-
-
-    # Read in the population metadata dataframe
-    meta = pd.read_feather('simulations/partnerships/scenario_' + str(scenario) + '/population_' + str(population_no) + '_meta.ftr')
-
-
-    # Check that the duration exposed is correct in meta
-    sim_parameters = pd.read_csv('data/param.csv')
-    meta.loc[meta.site0 == 1, 'site0_t0'] = sim_parameters.partner_burn_in[0] + sim_parameters.init_duration_exposed[0] * np.random.random(sum(meta.site0 == 1))
-    meta.loc[meta.site1 == 1, 'site1_t0'] = sim_parameters.partner_burn_in[0] + sim_parameters.init_duration_exposed[0] * np.random.random(sum(meta.site1 == 1))
-    meta.loc[meta.site2 == 1, 'site2_t0'] = sim_parameters.partner_burn_in[0] + sim_parameters.init_duration_exposed[0] * np.random.random(sum(meta.site2 == 1))
+def parse_population_data(scenario = 1, run_mode = run_mode, pop_set = 'default', inf_parameters = [], sim_parameters = []):
     
     
-    # Check for some new variables
-    if 'last_test_time' not in meta.columns:
-        meta.loc[:, 'test_reason_last'] = 0
-        meta.loc[:, 'test_time_last'] = -float('Inf')
-        meta.loc[:, 'test_time'] = float('Inf')
-        meta.loc[:, 'treatment_time'] = float('Inf')
-        meta.loc[:, 'vaccinated'] = False
-        meta.loc[:, 'vaccination_t0'] = float("inf")
-        meta.loc[:, 'vaccination_t1'] = float("inf")
-        meta.loc[:, 'booster_t0'] = float("inf")
+    # Read in a population that has just had the partnerships burned in
+    if pop_set != 'calibrated':
+        
+        
+        # Read in a specific set
+        population_no = random.randint(0, sim_parameters.n_populations[0]-1)
+        ( print('Population set: ' + str(population_no), flush = True) if run_mode == 'serial' else [] )
     
+    
+        # Read in the population metadata dataframe
+        meta = pd.read_feather('simulations/partnerships/scenario_' + str(scenario) + '/population_' + str(population_no) + '_meta.ftr')
+    
+    
+        # Check that the duration exposed is correct in meta
+        sim_parameters = pd.read_csv('data/param.csv')
+        meta.loc[meta.site0 == 1, 'site0_t0'] = sim_parameters.partner_burn_in[0] + sim_parameters.init_duration_exposed[0] * np.random.random(sum(meta.site0 == 1))
+        meta.loc[meta.site1 == 1, 'site1_t0'] = sim_parameters.partner_burn_in[0] + sim_parameters.init_duration_exposed[0] * np.random.random(sum(meta.site1 == 1))
+        meta.loc[meta.site2 == 1, 'site2_t0'] = sim_parameters.partner_burn_in[0] + sim_parameters.init_duration_exposed[0] * np.random.random(sum(meta.site2 == 1))
+        
+        
+        # Check for some new variables
+        if 'last_test_time' not in meta.columns:
+            meta.loc[:, 'test_reason_last'] = 0
+            meta.loc[:, 'test_time_last'] = -float('Inf')
+            meta.loc[:, 'test_time'] = float('Inf')
+            meta.loc[:, 'treatment_time'] = float('Inf')
+            meta.loc[:, 'vaccinated'] = False
+            meta.loc[:, 'vaccination_t0'] = float("inf")
+            meta.loc[:, 'vaccination_t1'] = float("inf")
+            meta.loc[:, 'booster_t0'] = float("inf")
+        
+    
+        # Read in the simulated partnership data arrays
+        partner_expire = np.load('simulations/partnerships/scenario_' + str(scenario) + '/population_' + str(population_no) + '_expire.npy')
+        partner_matrix = np.load('simulations/partnerships/scenario_' + str(scenario) + '/population_' + str(population_no) + '_matrix.npy')
 
-    # Read in the simulated partnership data arrays
-    partner_expire = np.load('simulations/partnerships/scenario_' + str(scenario) + '/population_' + str(population_no) + '_expire.npy')
-    partner_matrix = np.load('simulations/partnerships/scenario_' + str(scenario) + '/population_' + str(population_no) + '_matrix.npy')
 
-
+    # Read in a population where the infections have settled in
+    elif pop_set == 'calibrated':
+        
+        
+        # Read in meta data from calibration run
+        out_dir = 'simulations/calibration/scenario_' + str(scenario) + '/simulation_' + str(inf_parameters['parameter_no']) + '_'
+        with open(out_dir + 'output_environment.pkl', 'rb') as f:
+            env = pickle.load(f)
+        
+        
+        # Identify the population number
+        population_no = env['population_no']
+        ( print('Population set: calibrated (' + str(population_no) + ')', flush = True) if run_mode == 'serial' else [] )
+    
+    
+        # Read in simulated population data
+        meta = pd.read_feather(out_dir + 'output_meta.ftr')
+        partner_expire = np.load(out_dir + 'output_partner_expire.npy')
+        partner_matrix = np.load(out_dir + 'output_partner_matrix.npy')
+        
+        
+    
     # Return data
-    return meta, partner_expire, partner_matrix
+    return meta, partner_expire, partner_matrix, population_no
 
 
 
@@ -473,7 +510,7 @@ def parse_population_data(scenario = 1, population_no = 0, run_mode = run_mode):
 # A function which updates the arrays used to track transmission
 #
 #
-def update_tracking_data(meta, t, yt, inft, prvt, tstt):
+def update_tracking_data(meta, t, yt, inft, prvt, tstt, t0_sim):
     
     
     # Compute the current population size
@@ -534,7 +571,7 @@ def update_tracking_data(meta, t, yt, inft, prvt, tstt):
     
     
     # Compute the proportion of the population who have tested in the last 365 days
-    tested = meta.test_time_last >= (t-365)
+    tested = meta.test_time_last >= (t+t0_sim-365)
     tstt[t,:] = [np.sum(tested) / n,
                  np.sum((males & tested) & (meta.test_reason_last == int(1))) / np.sum(males),
                  np.sum((males & tested) & (meta.test_reason_last == int(2))) / np.sum(males),

@@ -20,6 +20,7 @@ import pandas as pd
 import tqdm as tqdm
 import matplotlib.pyplot as plt
 import time
+import json
 
 
 # My modules
@@ -31,9 +32,11 @@ import src.calibration.setup as setup
 import src.vaccinations.vaccination as vax
 
 
+# Some simulation parameters
 make_graphs = True
 run_mode = 'serial'
-scenario = 1
+inf_param_set = 'calibrated'
+scenario = 3
 
 
 #%% SETUP Parse simulation data
@@ -44,77 +47,22 @@ print('PARSING PARAMETERS\n------------------')
 sim_parameters, pop_parameters, prt_parameters, inf_parameters, meta, partner_expire, partner_matrix, population_no = \
     setup.setup_data(scenario = scenario,
                      run_mode = run_mode,
-                     inf_param_set = 'calibration')
+                     inf_param_set = inf_param_set)
 
 
-#%% SETUP Seed infections to ensure transmission
+# Set start time for simulation
+if inf_param_set == 'calibrated':
+    t0_sim = sim_parameters.partner_burn_in[0] + sim_parameters.simulation_length[0]
+else:
+    t0_sim = sim_parameters.partner_burn_in[0]
 
 
-# Set star time for simulation
-t0_sim = sim_parameters.partner_burn_in[0]
-
-
-# Just seed a tonne of infections
-site0 = np.random.random(len(meta)) < 0.25
-site1 = np.random.random(len(meta)) < 0.25
-site2 = np.random.random(len(meta)) < 0.25
-# infected = np.random.random(len(meta)) <= sim_parameters['init_prob_exposed'][0]
-infected = np.random.random(len(meta)) <= 1
-infected = (meta.risk == 1) & infected & (site0 | site1 | site2)
-meta.loc[infected, 'state'] = 'I'
-meta.loc[infected & site0, 'site0'] = int(1)
-meta.loc[infected & site1, 'site1'] = int(1)
-meta.loc[infected & site2, 'site2'] = int(1)
-meta.loc[(infected) & (site0), 'site0_t0'] = t0_sim
-meta.loc[(infected) & (site1), 'site1_t0'] = t0_sim
-meta.loc[(infected) & (site2), 'site2_t0'] = t0_sim
-meta.loc[(infected) & (site0), 'site0_t1'] = t0_sim + ng.duration_rectal(inf_parameters, meta.loc[(infected) & (site0), ], np.sum((infected) & (site0)))
-meta.loc[(infected) & (site1), 'site1_t1'] = t0_sim + ng.duration_urethral(inf_parameters, meta.loc[(infected) & (site1), ], np.sum((infected) & (site1)))
-meta.loc[(infected) & (site2), 'site2_t1'] = t0_sim + ng.duration_pharyngeal(inf_parameters, meta.loc[(infected) & (site2), ], np.sum((infected) & (site2)))
-
-
-
-#%% SETUP Initilise parameters for vaccination rollout
-
-
-# Deployment modes:
-#  0 vaccinations at the same time as treatments
-#  1 everyone vaccinated at the age of 16
-#  2 a proportion of each age group is vaccinated
-
-
-# Effectiveness
-#  0 complete immunity for the duration of the vaccine
-#  1 transmission probability is reduced
-#  2 the probability of being asymptomatic is increased
-#  3 the duration of infection is decreased
-#  4 a combination of all of the above
-
-
-# Setup parameters for vaccination
-vax_parameters = {'duration_mean': 200*365,
-                  'duration_var': 1,
-                  'prop_effective': 0,      # Probability of vaccination working
-                  'effect': 0,
-                  'site0_trans_reduce': 0,   # Scaling of the transmission probability
-                  'site1_trans_reduce': 0,   # Scaling of the transmission probability
-                  'site2_trans_reduce': 0,   # Scaling of the transmission probability
-                  'site0_symp_reduce': 0.5,    # Scaling of the probability of symptoms
-                  'site1_symp_reduce': 0.5,    # Scaling of the probability of symptoms
-                  'site2_symp_reduce': 0.5,    # Scaling of the probability of symptoms
-                  'site0_duration_reduce': 0.5, # Scaling of the duration of inection
-                  'site1_duration_reduce': 0.5, # Scaling of the duration of inection
-                  'site2_duration_reduce': 0.5, # Scaling of the duration of inection
-                  'deployment': 0,
-                  'prop_vax_0': 0.5,  # Proportion of 16-19 year olds vaccinated
-                  'prop_vax_1': 0.4,  # Proportion of 20-24 year olds vaccinated
-                  'prop_vax_2': 0.1,  # Proportion of 25-29 year olds vaccinated
-                  'prop_vax_3': 0.0}  # Proportion of over 30 year olds vaccinated
+# Import vaccination parameters
+from data.vaccine_parameter_files.test_parameters import vax_parameters
 
 
 # Setup method for updating infections
 update_infections = vax.set_function_for_updating_infections(vax_parameters)
-
 
 
 #%% RUN Simulation
@@ -122,7 +70,7 @@ update_infections = vax.set_function_for_updating_infections(vax_parameters)
 
 # Setup time variables
 # n_steps = sim_parameters.simulation_length[0]
-n_steps = int(30*365)
+n_steps = int(10*365)
 tt = range(t0_sim, t0_sim + n_steps)
 
 
@@ -173,7 +121,7 @@ for t in tqdm.tqdm(tt):
         pop_parameters = demo.update_attribute_tracker(pop_parameters, meta, partner_matrix)
         compartments_demo, import_count, demographic, import_time, export_count, active_age = demo.update_demographic_tracker(t - t0_sim, pop_parameters, meta, compartments_demo, import_count, demographic, import_time, export_count, active_age, t0_sim = t0_sim)
         partners_cohort, partners_risk, partners_cum_risk, partners_cum_age, partners_cum_tot = prt.update_partnership_trackers(t - t0_sim, pop_parameters, meta, partner_matrix, partners_cohort, partners_risk, partners_cum_risk, partners_cum_age, partners_cum_tot)
-        inf_tracker = ng.update_infection_trackers(t - t0_sim, pop_parameters, meta, inf_tracker)
+        inf_tracker = ng.update_infection_trackers(t - t0_sim, pop_parameters, meta, inf_tracker, t0_sim)
     
     
 
