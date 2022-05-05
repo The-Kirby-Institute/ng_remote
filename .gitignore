@@ -3,6 +3,7 @@ simulations/calibration/
 simulations/partnerships/
 simulations/populations/
 simulations/vaccination/
+!simulations/vaccination/vaccination_scenarios/
 graphs/
 documents/
 data/2016_ATSIP_ILOC_for_AUS_short-header/
