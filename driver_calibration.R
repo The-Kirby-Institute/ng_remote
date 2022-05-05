@@ -5,6 +5,7 @@ library(viridis)
 library(epiR)
 library(progress)
 np = import('numpy')
+pd = import('pandas')
 
 
 ########################################
@@ -24,6 +25,20 @@ target =
   as_tibble()
 
 
+# Read in the target testing rates
+target_test = 
+  read.csv('data/testing_rates.csv') %>%
+  as_tibble() %>%
+  mutate(prob = 100 * prob,
+         lab = case_when(gender == 0 ~ str_c('f', age_group, sep = ''),
+                         gender == 1 ~ str_c('m', age_group, sep = ''))) %>%
+  select(-age_group, -gender) %>%
+  spread(lab, prob) %>%
+  mutate(tot = 19,
+         m = 14,
+         f = 23)
+
+
 # Initilise columns for computing prevalence
 data = 
   data %>%
@@ -38,7 +53,10 @@ data =
          prev_f0 = NA,
          prev_f1 = NA,
          prev_f2 = NA,
-         prev_f3 = NA)
+         prev_f3 = NA,
+         test_tot = NA,
+         test_m = NA,
+         test_f = NA)
 
 
 # Read in data and determine the equilibrium point
@@ -48,16 +66,25 @@ for (i in 0:(nrow(data)-1)){
   pb$tick()
   
   
-  # Load prevalence data
+  # Load simulation data
   file_name = str_c('simulations/calibration/scenario_', scenario, '/simulation_', i, '_output_prevalence.npy')
+  file_name_2 = str_c('simulations/calibration/scenario_', scenario, '/simulation_', i, '_output_environment.pkl')
   if ( file.exists(file_name) ){
+    
+    
+    # Load prevalence
     prev = np$load(file_name) %>% as_tibble()
     names(prev) = c('tot', 'm', 'f', 'm0', 'm1', 'm2', 'm3', 'm4', 'f0', 'f1', 'f2', 'f3', 'f4')
     prev = 100 * prev
     
     
-    # Look for the maximum t where the model seems to have converged to equilibrium
+    # Load testing rates
+    test = 100 * pd$read_pickle(file_name_2)$tstt
+
+    
+    # Look for the maximum t where the prevalence seems to have converged to equilibrium
     prev = prev[seq(round(nrow(prev)/2), nrow(prev), 50),]
+    test = test[seq(round(nrow(test)/2), nrow(test), 50),]
     n = nrow(prev)
     prev$t = 1:n
     for ( t0 in 1:(n-10) ){
@@ -75,6 +102,7 @@ for (i in 0:(nrow(data)-1)){
         
         # Compute the mean prevalence
         prev = prev[t0:n, ]
+        test = test[t0:n, c(1, 5, 9)]
         data$prev_tot[i+1] = mean(prev$tot)
         data$prev_m[i+1] = mean(prev$m)
         data$prev_f[i+1] = mean(prev$f)
@@ -86,6 +114,9 @@ for (i in 0:(nrow(data)-1)){
         data$prev_f1[i+1] = mean(prev$f1)
         data$prev_f2[i+1] = mean(prev$f2)
         data$prev_f3[i+1] = mean(prev$f3)
+        data$test_tot[i+1] = mean(test[,1])
+        data$test_m[i+1] = mean(test[,2])
+        data$test_f[i+1] = mean(test[,3])
         break
         
       }
@@ -102,7 +133,7 @@ data =
 
 # Summary of overall prevalence
 data %>%
-  select(starts_with('prev')) %>%
+  select(starts_with('prev') | starts_with('test')) %>%
   gather(series, prev) %>%
   ggplot(aes(x=prev)) +
   geom_histogram(bins = 20) +
@@ -118,8 +149,8 @@ data %>%
 
 
 # Compute correlation with different variables
-x = data %>% filter(!is.na(prev_tot)) %>% select(-starts_with('prev'), -starts_with('mean'), -set)
-y = data %>% filter(!is.na(prev_tot)) %>% select(starts_with('prev'))
+x = data %>% filter(!is.na(prev_tot)) %>% select(-starts_with('prev'), -starts_with('test'), -starts_with('mean'), -set)
+y = data %>% filter(!is.na(prev_tot)) %>% select(starts_with('prev'), starts_with('test'))
 out = tibble(var = names(x), 
              cor_tot = NA,
              cor_m = NA,
@@ -131,7 +162,10 @@ out = tibble(var = names(x),
              cor_f0 = NA,
              cor_f1 = NA,
              cor_f2 = NA,
-             cor_f3 = NA)
+             cor_f3 = NA,
+             cor_ttot = NA,
+             cor_tm = NA,
+             cor_tf = NA)
 compute_cor = function(x, y){
   out = epi.prcc(tibble(x, y))
   return(out$est)
@@ -151,6 +185,9 @@ for ( i in 1:ncol(x) ){
     out$cor_f1[i] = compute_cor(x[,i], y[,9])
     out$cor_f2[i] = compute_cor(x[,i], y[,10])
     out$cor_f3[i] = compute_cor(x[,i], y[,11])
+    out$cor_ttot[i] = compute_cor(x[,i], y[,12])
+    out$cor_tm[i] = compute_cor(x[,i], y[,13])
+    out$cor_tf[i] = compute_cor(x[,i], y[,14])
   }
 }
 
@@ -180,8 +217,8 @@ out %>%
          var = reorder(var, cor_tot)) %>%
   gather(type, val, -var) %>%
   mutate(type = ordered(type, 
-                        levels=c('cor_tot', 'cor_m', 'cor_f', 'cor_m0', 'cor_m1', 'cor_m2', 'cor_m3', 'cor_f0', 'cor_f1', 'cor_f2', 'cor_f3'),
-                        labels=c('Overall', 'Males', 'Females', 'Male 16-19', 'Male 20-24', 'Male 25-29', 'Male 30-35', 'Female 16-19', 'Female 20-24', 'Female 25-29', 'Female 30-35')),
+                        levels=c('cor_tot', 'cor_m', 'cor_f', 'cor_m0', 'cor_m1', 'cor_m2', 'cor_m3', 'cor_f0', 'cor_f1', 'cor_f2', 'cor_f3', 'cor_ttot', 'cor_tm', 'cor_tf'),
+                        labels=c('Overall', 'Males', 'Females', 'Male 16-19', 'Male 20-24', 'Male 25-29', 'Male 30-35', 'Female 16-19', 'Female 20-24', 'Female 25-29', 'Female 30-35', 'Test Overall', 'Test Males', 'Test Females')),
          # val = case_when(val > 0.2 ~ 0.2,
          #                 val > 0.1 ~ 0.1,
          #                 val > 0 ~ 0,
@@ -200,7 +237,7 @@ out %>%
   scale_fill_distiller(palette = 'Spectral') + #, limits = c(-.9, .9)) +
   labs(y = 'Parameters being calibrated',
        x = 'Prevalence Category',
-       title = 'Partial-rank Correlation Coefficient Between Prevalence Parameters',
+       title = 'Partial-rank Correlation Coefficient Between Simulation Results and Input Parameters',
        fill = 'Correlation') +
   theme(axis.text.x = element_text(angle = -30, hjust = 0.1))
 
@@ -217,7 +254,7 @@ age_gender_weight_m = 1/11
 age_gender_weight_f = 1/11
 data = 
   data %>%
-  mutate(mean_ss = (overall_weight * (data$prev_tot - target$tot)^2 +
+  mutate(prev_ss = (overall_weight * (prev_tot - target$tot)^2 +
                     gender_weight * (prev_m - target$m)^2 +
                     gender_weight * (prev_f - target$f)^2 +
                     age_gender_weight_m * (prev_m0 - target$m0)^2 +
@@ -227,13 +264,19 @@ data =
                     age_gender_weight_f * (prev_f0 - target$f0)^2 +
                     age_gender_weight_f * (prev_f1 - target$f1)^2 +
                     age_gender_weight_f * (prev_f2 - target$f2)^2 +
-                    age_gender_weight_f * (prev_f3 - target$f3)^2))
+                    age_gender_weight_f * (prev_f3 - target$f3)^2),
+         test_ss = (1/6 * (prev_tot - target$tot)^2 +
+                    1/6 * (prev_m - target$m)^2 +
+                    1/6 * (prev_f - target$f)^2 +
+                    1/6 * (test_tot - target_test$tot)^2 +
+                    1/6 * (test_m - target_test$m)^2 +
+                    1/6 * (test_f - target_test$f)^2))
 
 
 # Make a graph of all RSS results
 data %>%
-  filter(!is.na(mean_ss)) %>%
-  ggplot(aes(x=mean_ss)) +
+  filter(!is.na(prev_ss)) %>%
+  ggplot(aes(x=prev_ss)) +
   geom_histogram(bins = 40) +
   labs(x = 'Mean Residual Sum of Squares Across Prevalence Categories',
        y = 'Count',
@@ -243,7 +286,7 @@ data %>%
 # Pull out the best 50
 calibrated = 
   data %>%
-  arrange(mean_ss) %>%
+  arrange(test_ss) %>%
   slice_head(n = 50)
 write.csv(calibrated, str_c('simulations/calibrated_scenario_', scenario, '.csv'), row.names = F)
 
@@ -361,13 +404,16 @@ data %>%
          prev_f1 = prev_f1 - target$f1,
          prev_f2 = prev_f2 - target$f2,
          prev_f3 = prev_f3 - target$f3,
+         test_tot = test_tot - target_test$tot,
+         test_m = test_m - target_test$m,
+         test_f = test_f - target_test$f,
          chosen = case_when(set %in% calibrated$set ~ T, T ~ F)) %>%
-  select(chosen, starts_with('prev')) %>%
+  select(chosen, starts_with('prev'), starts_with('test'), -ends_with('ss')) %>%
   gather(case, val, -chosen) %>%
   mutate(cases = as.factor(case),
          case = ordered(case, 
-                        levels=c('prev_tot', 'prev_m', 'prev_f', 'prev_m0', 'prev_m1', 'prev_m2', 'prev_m3', 'prev_f0', 'prev_f1', 'prev_f2', 'prev_f3'),
-                        labels=c('Overall', 'Males', 'Females', 'Male 16-19', 'Male 20-24', 'Male 25-29', 'Male 30-35', 'Female 16-19', 'Female 20-24', 'Female 25-29', 'Female 30-35'))) %>%
+                        levels=c('prev_tot', 'prev_m', 'prev_f', 'prev_m0', 'prev_m1', 'prev_m2', 'prev_m3', 'prev_f0', 'prev_f1', 'prev_f2', 'prev_f3', 'test_tot', 'test_m', 'test_f'),
+                        labels=c('Overall', 'Males', 'Females', 'Male 16-19', 'Male 20-24', 'Male 25-29', 'Male 30-35', 'Female 16-19', 'Female 20-24', 'Female 25-29', 'Female 30-35', 'Test Overall', 'Test Male', 'Test Female'))) %>%
   ggplot(aes(fill = chosen, x = val)) +
   geom_vline(aes(xintercept = 0), lty = 'dashed') +
   geom_density(alpha = 0.6) + 
@@ -392,12 +438,12 @@ target_long =
 data %>%
   filter(!is.na(prev_tot)) %>%
   mutate(chosen = case_when(set %in% calibrated$set ~ T, T ~ F)) %>%
-  select(chosen, starts_with('prev')) %>%
+  select(chosen, starts_with('prev'), starts_with('test'), -ends_with('ss')) %>%
   gather(case, val, -chosen) %>%
   mutate(cases = as.factor(case),
          case = ordered(case, 
-                        levels=c('prev_tot', 'prev_m', 'prev_f', 'prev_m0', 'prev_m1', 'prev_m2', 'prev_m3', 'prev_f0', 'prev_f1', 'prev_f2', 'prev_f3'),
-                        labels=c('Overall', 'Males', 'Females', 'Male 16-19', 'Male 20-24', 'Male 25-29', 'Male 30-35', 'Female 16-19', 'Female 20-24', 'Female 25-29', 'Female 30-35'))) %>%
+                        levels=c('prev_tot', 'prev_m', 'prev_f', 'prev_m0', 'prev_m1', 'prev_m2', 'prev_m3', 'prev_f0', 'prev_f1', 'prev_f2', 'prev_f3', 'test_tot', 'test_m', 'test_f'),
+                        labels=c('Overall', 'Males', 'Females', 'Male 16-19', 'Male 20-24', 'Male 25-29', 'Male 30-35', 'Female 16-19', 'Female 20-24', 'Female 25-29', 'Female 30-35', 'Test Overall', 'test Male', 'Test Female'))) %>%
   ggplot(aes(fill = chosen, x = val)) +
   geom_vline(aes(xintercept = prev), target_long, lty = 'dashed') +
   geom_density(alpha = 0.6) + 
@@ -416,7 +462,7 @@ data %>%
 
 data %>%
   mutate(chosen = case_when(set %in% calibrated$set ~ T, T ~ F)) %>%
-  select(-starts_with('prev'), -mean_ss, -set) %>%
+  select(-starts_with('prev'), -starts_with('test'), -set) %>%
   gather(param, val, -chosen) %>%
   mutate(param = case_when(param == 'pup' ~ 'Urethra => Pharynx',
                            param == 'ppp' ~ 'Pharynx => Pharynx',
@@ -426,6 +472,9 @@ data %>%
                            param == 'prp' ~ 'Rectum => Pharynx',
                            param == 'ppr' ~ 'Pharynx => Rectum',
                            param == 'puu' ~ 'Urethra => Urethra',
+                           param == 'symptoms_rectal' ~ 'Testing rate rectal',
+                           param == 'symptoms_ural_male' ~ 'Testing rate urethral male',
+                           param == 'symptoms_ural_female' ~ 'Testing rate urethral female',
                            T ~ param)) %>%
   ggplot(aes(x = val, fill = chosen)) +
   geom_density(alpha = 0.6) +

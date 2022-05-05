@@ -228,9 +228,11 @@ def initilise_meta(n):
                                    'test_reason_last',        # Reason for last test
                                    'treatment_time',        # Simulation time of next treatment
                                    'vaccinated',             # Booian are they currently considered vaccinated
+                                   'boosted',
                                    'vaccination_t0',        # Time they were vaccinated
                                    'vaccination_t1',        # Time their vaccine wears off
                                    'booster_t0',            # Time they get a booster
+                                   'booster_t1',
                                    ])         
     
     
@@ -266,9 +268,11 @@ def initilise_meta(n):
     meta_init.test_reason_last.astype("int64")
     meta_init.treatment_time.astype("float64")
     meta_init.vaccinated.astype("bool")
+    meta_init.boosted.astype("bool")
     meta_init.vaccination_t0.astype("float64")
     meta_init.vaccination_t1.astype("float64")
     meta_init.booster_t0.astype("float64")
+    meta_init.booster_t1.astype("float64")
 
 
     # Set default values
@@ -303,9 +307,11 @@ def initilise_meta(n):
     meta_init.loc[:, 'test_reason_last'] = 0
     meta_init.loc[:, 'treatment_time'] = float('Inf')
     meta_init.loc[:, 'vaccinated'] = False
+    meta_init.loc[:, 'boosted'] = False
     meta_init.loc[:, 'vaccination_t0'] = float("inf")
     meta_init.loc[:, 'vaccination_t1'] = float("inf")
     meta_init.loc[:, 'booster_t0'] = float("inf")
+    meta_init.loc[:, 'booster_t1'] = float("inf")
 
 
     return meta_init

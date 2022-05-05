@@ -14,151 +14,79 @@ inplimented in the model.
 #%% SETUP Modules
 
 
-# Standard modules
-import numpy as np
-import pandas as pd
-import tqdm as tqdm
-import matplotlib.pyplot as plt
-import time
-import json
-
-
-# My modules
-import src.demographic.generate_population as pop
-import src.demographic.population_dynamics as demo
-import src.partners.partners as prt
-import src.infections.ng as ng
-import src.calibration.setup as setup
+# Modules
+from multiprocessing import Pool
 import src.vaccinations.vaccination as vax
 
 
-# Some simulation parameters
-make_graphs = True
-run_mode = 'serial'
-inf_param_set = 'calibrated'
-scenario = 3
-
-
-#%% SETUP Parse simulation data
-print('PARSING PARAMETERS\n------------------')
-
-
-# Setup simulation data
-sim_parameters, pop_parameters, prt_parameters, inf_parameters, meta, partner_expire, partner_matrix, population_no = \
-    setup.setup_data(scenario = scenario,
-                     run_mode = run_mode,
-                     inf_param_set = inf_param_set)
-
-
-# Set start time for simulation
-if inf_param_set == 'calibrated':
-    t0_sim = sim_parameters.partner_burn_in[0] + sim_parameters.simulation_length[0]
-else:
-    t0_sim = sim_parameters.partner_burn_in[0]
-
-
 # Import vaccination parameters
-from data.vaccine_parameter_files.test_parameters import vax_parameters
+# from simulations.vaccination.vaccination_scenarios.test_parameters import vax_parameters
+# from simulations.vaccination.vaccination_scenarios.test_1_vax_distributed_no_effect import vax_parameters
+# from simulations.vaccination.vaccination_scenarios.test_2_vax_means_no_infections import vax_parameters
+# from simulations.vaccination.vaccination_scenarios.test_3_vax_means_infection_half_as_likely import vax_parameters
+# from simulations.vaccination.vaccination_scenarios.test_4_vax_means_no_transmission import vax_parameters
+# from simulations.vaccination.vaccination_scenarios.test_5_vax_means_half_transmission import vax_parameters
+# from simulations.vaccination.vaccination_scenarios.test_6_vax_means_no_detection import vax_parameters
+# from simulations.vaccination.vaccination_scenarios.test_7_vax_means_half_detection import vax_parameters
+# from simulations.vaccination.vaccination_scenarios.test_8_vax_means_no_infectious_period import vax_parameters
+# from simulations.vaccination.vaccination_scenarios.test_9_vax_means_half_infectious_period import vax_parameters
+# from simulations.vaccination.vaccination_scenarios.test_10_vax_means_all_effects import vax_parameters
+# from simulations.vaccination.vaccination_scenarios.test_11_vax_means_no_effects import vax_parameters
+# from simulations.vaccination.vaccination_scenarios.test_12_vax_means_no_rectal import vax_parameters
+# from simulations.vaccination.vaccination_scenarios.test_13_vax_means_no_pharyngeal import vax_parameters
+# from simulations.vaccination.vaccination_scenarios.test_14_vax_means_no_urethral import vax_parameters
+# from simulations.vaccination.vaccination_scenarios.test_15_vax_means_all_effects_at_debut import vax_parameters
+# from simulations.vaccination.vaccination_scenarios.test_16_vax_means_all_effects_all_cohorts import vax_parameters
+from simulations.vaccination.vaccination_scenarios.test_17_vax_everyone import vax_parameters
 
 
-# Setup method for updating infections
-update_infections = vax.set_function_for_updating_infections(vax_parameters)
 
 
-#%% RUN Simulation
 
 
-# Setup time variables
-# n_steps = sim_parameters.simulation_length[0]
-n_steps = int(10*365)
-tt = range(t0_sim, t0_sim + n_steps)
+#%% RUN SIMULATIONS
 
 
-track_vax = np.zeros((n_steps, 6*2))
+# Set parameters
+run_mode = 'serial'
+n_cores = max(16, vax_parameters['n_sims'])
+sim_run = list(range(0, vax_parameters['n_sims']))
 
 
-# Initlise variables for making graphs
-if make_graphs:
-    partners_cohort, partners_risk, partners_cum_risk, partners_cum_age, partners_cum_tot = prt.initilise_partnership_trackers(n_steps)
-    compartments_demo, import_count, export_count, demographic, import_time, active_age = demo.initilise_demographic_trackers(n_steps, t0_sim = t0_sim)
-    inf_tracker = ng.initilise_infection_trackers(n_steps)
 
 
-# Record code runtime
-t0 = time.time()
-
-
-# Check to see if this dataset has been run to completion
-( print('Running simulation...\n', flush = True) if run_mode == 'serial' else [] )
-for t in tqdm.tqdm(tt):
-
-
-    # Update demographic
-    meta, partner_matrix, partner_expire = demo.update_population(t, pop_parameters, prt_parameters, inf_parameters, meta, partner_matrix, partner_expire)
+# If running in serial
+if run_mode == 'serial':
     
     
-    # Update partnerships
-    meta, partner_matrix, partner_expire = prt.update_partnerships(t, prt_parameters, meta, partner_matrix, partner_expire)
+    # Run all the sims
+    for sim_no in sim_run:
+        vax.run_vaccine_scenario(vax_parameters, sim_no, run_mode = 'serial')
+
+
+
+
+# If running in parallel
+if run_mode == 'parallel':
     
     
-    # Update infections
-    meta = update_infections(t, pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix)
+    # Define worker for running the simulation
+    def worker(it):
+        vax.run_vaccine_scenario(vax_parameters, it, run_mode = 'parallel')
     
     
-    # Update vaccine tracker
-    ii = 0
-    for state in ['S', 'E', 'I', 'R', 'T', 'V']:
-        track_vax[t-t0_sim, ii] = np.sum((meta.vaccinated) & (meta.state == state))
-        ii = ii + 1
-        
-    for state in ['S', 'E', 'I', 'R', 'T', 'V']:
-        track_vax[t-t0_sim, ii] = np.sum((~meta.vaccinated) & (meta.state == state))
-        ii = ii + 1
+    # Define pool handler
+    def pool_handler():
+        p = Pool(n_cores)
+        p.map(worker, sim_run)
     
     
-    # Update trackers for graphs
-    if make_graphs:
-        pop_parameters = demo.update_attribute_tracker(pop_parameters, meta, partner_matrix)
-        compartments_demo, import_count, demographic, import_time, export_count, active_age = demo.update_demographic_tracker(t - t0_sim, pop_parameters, meta, compartments_demo, import_count, demographic, import_time, export_count, active_age, t0_sim = t0_sim)
-        partners_cohort, partners_risk, partners_cum_risk, partners_cum_age, partners_cum_tot = prt.update_partnership_trackers(t - t0_sim, pop_parameters, meta, partner_matrix, partners_cohort, partners_risk, partners_cum_risk, partners_cum_age, partners_cum_tot)
-        inf_tracker = ng.update_infection_trackers(t - t0_sim, pop_parameters, meta, inf_tracker, t0_sim)
-    
-    
-
-        
-
-# Print update
-runtime = (time.time() - t0)/60
-rt_min = int(np.floor(runtime))
-rt_sec = int(60 * (runtime - rt_min))
-print('\nRuntime: ' + str(rt_min) + ' min ' + str(rt_sec) + ' seconds')
+    # Batch scripts
+    if __name__ == '__main__':
+        pool_handler()
 
 
-#%% GRAPHS
 
-
-if make_graphs:
-    demo.make_demographic_graphs(tt, pop_parameters, compartments_demo, import_count, demographic, import_time, export_count, active_age)
-    prt.make_partnership_graphs(tt, pop_parameters, partners_cohort, partners_risk, partners_cum_risk, partners_cum_age, partners_cum_tot)
-    ng.make_infection_graphs(tt, inf_tracker, pop_parameters)
-
-
-# # Setup graph
-# cmap = plt.get_cmap("tab10")
-# fig, ax = plt.subplots(1)
-
-# # Put on high-level state numbers
-# states = ['S', 'E', 'I', 'R', 'T', 'V']
-# for ii in range(1, 6):
-#     ax.plot(tt, track_vax[:, ii+6], label = states[ii] + '-NoVax', color = cmap(ii))
-#     ax.plot(tt, track_vax[:, ii], label = states[ii] + '-Vax', color = cmap(ii), linestyle = '--')
-
-
-# # Labels
-# ax.set_title('Number of People in Each Infection State\nBy Whether They are Vaccinated')
-# ax.legend(ncol = 5)
-# plt.xlabel('Day')
-# plt.ylabel('Number of People')
 
 
 

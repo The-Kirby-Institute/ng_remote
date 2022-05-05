@@ -466,9 +466,11 @@ def parse_population_data(scenario = 1, run_mode = run_mode, pop_set = 'default'
             meta.loc[:, 'test_time'] = float('Inf')
             meta.loc[:, 'treatment_time'] = float('Inf')
             meta.loc[:, 'vaccinated'] = False
+            meta.loc[:, 'boosted'] = False
             meta.loc[:, 'vaccination_t0'] = float("inf")
             meta.loc[:, 'vaccination_t1'] = float("inf")
             meta.loc[:, 'booster_t0'] = float("inf")
+            meta.loc[:, 'booster_t1'] = float("inf")
         
     
         # Read in the simulated partnership data arrays
@@ -495,6 +497,12 @@ def parse_population_data(scenario = 1, run_mode = run_mode, pop_set = 'default'
         meta = pd.read_feather(out_dir + 'output_meta.ftr')
         partner_expire = np.load(out_dir + 'output_partner_expire.npy')
         partner_matrix = np.load(out_dir + 'output_partner_matrix.npy')
+        
+        
+        # Check for some new variables
+        if 'boosted' not in meta.columns:
+            meta.loc[:, 'boosted'] = False
+            meta.loc[:, 'booster_t1'] = float("inf")
         
         
     
@@ -590,7 +598,7 @@ def update_tracking_data(meta, t, yt, inft, prvt, tstt, t0_sim):
 
 
 
-#%% make_tracking_graphs()
+#%% FUN make_tracking_graphs()
 #
 #
 # Makes graphs
