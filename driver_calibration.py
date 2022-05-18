@@ -58,8 +58,8 @@ sim_parameters = list(range(0, sim_parameters['n_parameter_sets'][0]))
 # Define function for running the code
 def worker(it):
     # calibrate.run_one_simulation(scenario = 1, parameter_no = it, run_mode = 'parallel')
-    # calibrate.run_one_simulation(scenario = 2, parameter_no = it, run_mode = 'parallel')
-    calibrate.run_one_simulation(scenario = 3, parameter_no = it, run_mode = 'parallel')
+    calibrate.run_one_simulation(scenario = 2, parameter_no = it, run_mode = 'parallel')
+    # calibrate.run_one_simulation(scenario = 3, parameter_no = it, run_mode = 'parallel')
 
 
 # Define function for handling the parallel pool

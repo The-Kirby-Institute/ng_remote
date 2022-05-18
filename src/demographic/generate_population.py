@@ -233,6 +233,7 @@ def initilise_meta(n):
                                    'vaccination_t1',        # Time their vaccine wears off
                                    'booster_t0',            # Time they get a booster
                                    'booster_t1',
+                                   'vaccine_source',        # Which channel they recieved their vaccine through
                                    ])         
     
     
@@ -273,6 +274,7 @@ def initilise_meta(n):
     meta_init.vaccination_t1.astype("float64")
     meta_init.booster_t0.astype("float64")
     meta_init.booster_t1.astype("float64")
+    meta_init.booster_t1.astype("int64")
 
 
     # Set default values
@@ -312,6 +314,7 @@ def initilise_meta(n):
     meta_init.loc[:, 'vaccination_t1'] = float("inf")
     meta_init.loc[:, 'booster_t0'] = float("inf")
     meta_init.loc[:, 'booster_t1'] = float("inf")
+    meta_init.loc[:, 'vaccine_source'] = int(0)
 
 
     return meta_init

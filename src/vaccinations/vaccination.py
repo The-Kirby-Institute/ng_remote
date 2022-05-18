@@ -61,10 +61,20 @@ def run_vaccine_scenario(vax_parameters, sim_no, run_mode = 'serial'):
         setup.setup_data(scenario = scenario,
                         run_mode = run_mode,
                         inf_param_set = inf_param_set)
+        
+        
+    # Overwrite testing rates
+    t_max = np.max(meta.test_time_last)
+    for i in range(0, len(pop_parameters['testing_rates'])):
+        age = pop_parameters['testing_rates'].age_group.iloc[i]
+        gender = pop_parameters['testing_rates'].gender.iloc[i]
+        who = meta.loc[(meta.age_group == age) & (meta.gender == gender), :]
+        who_test_background = who.loc[(who.test_reason_last == int(2)) & (t_max - who.test_time_last <= 365), :]
+        pop_parameters['testing_rates'].loc[i, 'prob'] = len(who_test_background)/len(who)
 
 
     # Setup simulation runtime
-    n_steps = 365*vax_parameters['n_years'] if 'n_days' in vax_parameters else  sim_parameters.simulation_length[0]
+    n_steps = int(365*vax_parameters['n_years']) if 'n_years' in vax_parameters else  sim_parameters.simulation_length[0]
     t0_sim = sim_parameters.partner_burn_in[0] + sim_parameters.simulation_length[0]
     tt = range(t0_sim, t0_sim + n_steps)
     
@@ -99,7 +109,7 @@ def run_vaccine_scenario(vax_parameters, sim_no, run_mode = 'serial'):
 
 
         # Update infection trackers
-        inf_tracker = update_tracking_data(meta, t0_sim, t - t0_sim, inf_tracker)
+        inf_tracker = update_tracking_data(meta, partner_matrix, t0_sim, t - t0_sim, inf_tracker)
     
     
     # Progress
@@ -108,7 +118,7 @@ def run_vaccine_scenario(vax_parameters, sim_no, run_mode = 'serial'):
     
     # Make ouput graphs
     ( print('Making summary graphs') if run_mode == 'serial' else [] )
-    make_tracking_graphs(tt, sim_no, inf_tracker, out_dir)
+    make_tracking_graphs(pop_parameters, tt, sim_no, inf_tracker, out_dir)
     
     
     # Saving all environment variables
@@ -155,6 +165,8 @@ def run_vaccine_scenario(vax_parameters, sim_no, run_mode = 'serial'):
 
 
 #%% FUN set_function_for_updating_infections()
+# Function was retired because the who things became unnecessary when I
+# finished witht he testing phase.
 #
 #
 # Top-level function which handles how the vaccine parameters
@@ -165,403 +177,35 @@ def set_function_for_updating_infections(vax_parameters):
 
     
     ##########################################
-    ##  ALL EFFECTS WITH DEPLOYMENT MODE 0  ##
-    ##########################################
-    
-    
-    # Where distribution occurrs during treatment
-    if vax_parameters['deployment'] == 0:
-
-
-        # Where the effect is total immunity
-        if vax_parameters['effect'] == 0:
-
-
-            # Situation where vaccinations given during treatment and makes people immune
-            def update_infections(t, pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix):
-                meta = progress_state_of_vaccination(meta, t)
-                meta = ng.new_infections(pop_parameters, inf_parameters, meta, partner_matrix, t, 
-                                         trans_prob_fun = vaccine_reduced_infection_prob, 
-                                         vax_parameters = vax_parameters)
-                meta = ng.progress_state_of_infection(meta, t)
-                meta = progress_state_of_vaccination(meta, t)
-                meta = seek_treatment(pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix, t)
-                return meta
-
-
-        # Where the effect is to reduce transmission
-        elif vax_parameters['effect'] == 1:
-
-
-            # Situation where vaccines given during treatment and result is to
-            # decrease transmission probability
-            def update_infections(t, pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix):
-                meta = progress_state_of_vaccination(meta, t)
-                meta = ng.new_infections(pop_parameters, inf_parameters, meta, partner_matrix, t, 
-                                         trans_prob_fun = vaccine_reduced_trans_prob, 
-                                         vax_parameters = vax_parameters)
-                meta = ng.progress_state_of_infection(meta, t)
-                meta = progress_state_of_vaccination(meta, t)
-                meta = seek_treatment(pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix, t)
-                return meta
-
-
-        # Where the effect is to reduce symptoms
-        elif vax_parameters['effect'] == 2:
-
-
-            # Situation where vaccines given during treatment and result in
-            # people being more likely to be asymptomatic
-            def update_infections(t, pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix):
-                meta = progress_state_of_vaccination(meta, t)
-                meta = ng.new_infections(pop_parameters, inf_parameters, meta, partner_matrix, t, 
-                                         symptoms_prob = symptoms_vax,
-                                         vax_parameters = vax_parameters)
-                meta = ng.progress_state_of_infection(meta, t)
-                meta = progress_state_of_vaccination(meta, t)
-                meta = seek_treatment(pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix, t)
-                return meta
-
-
-        # Where the effect is the reduce the duration of infection
-        elif vax_parameters['effect'] == 3:
-
-
-            # Situation where vaccines given during treatment and result in
-            # people having a shorter duration of infection
-            def update_infections(t, pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix):
-                meta = progress_state_of_vaccination(meta, t)
-                meta = ng.new_infections(pop_parameters, inf_parameters, meta, partner_matrix, t, 
-                                         duration_mod = duration_vax,
-                                         vax_parameters = vax_parameters)
-                meta = ng.progress_state_of_infection(meta, t)
-                meta = progress_state_of_vaccination(meta, t)
-                meta = seek_treatment(pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix, t)
-                return meta
-            
-            
-        # Where the effect includes all of the above
-        elif vax_parameters['effect'] == 4:
-            
-            
-            # Situation where vaccines have a combination of all of the
-            # above effects
-            def update_infections(t, pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix):
-                meta = progress_state_of_vaccination(meta, t)
-                meta = ng.new_infections(pop_parameters, inf_parameters, meta, partner_matrix, t, 
-                                         trans_prob_fun = vaccine_reduced_trans_and_inf_prob, 
-                                         symptoms_prob = symptoms_vax,
-                                         duration_mod = duration_vax,
-                                         vax_parameters = vax_parameters)
-                meta = ng.progress_state_of_infection(meta, t)
-                meta = progress_state_of_vaccination(meta, t)
-                meta = seek_treatment(pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix, t)
-                return meta
-            
-            
-    ##########################################
-    ##  ALL EFFECTS WITH DEPLOYMENT MODE 1  ##
-    ##########################################
-    
-    
-    # Where distribution occurs at the age of 16
-    elif vax_parameters['deployment'] == 1:
-
-
-        # Where the effect is total immunity
-        if vax_parameters['effect'] == 0:
-
-
-            # Situation where vaccinations given during treatment and makes people immune
-            def update_infections(t, pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix):
-                meta = vax_at_debut(vax_parameters, meta, t)
-                meta = progress_state_of_vaccination(meta, t)
-                meta = ng.new_infections(pop_parameters, inf_parameters, meta, partner_matrix, t, 
-                                         trans_prob_fun = vaccine_reduced_infection_prob, 
-                                         vax_parameters = vax_parameters)
-                meta = ng.progress_state_of_infection(meta, t)
-                meta = progress_state_of_vaccination(meta, t)
-                meta = ng.seek_treatment(pop_parameters, inf_parameters, meta, partner_matrix, t)
-                return meta
-
-
-        # Where the effect is to reduce transmission
-        elif vax_parameters['effect'] == 1:
-
-
-            # Situation where vaccines given during treatment and result is to
-            # decrease transmission probability
-            def update_infections(t, pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix):
-                meta = vax_at_debut(vax_parameters, meta, t)
-                meta = progress_state_of_vaccination(meta, t)
-                meta = ng.new_infections(pop_parameters, inf_parameters, meta, partner_matrix, t, 
-                                         trans_prob_fun = vaccine_reduced_trans_prob, 
-                                         vax_parameters = vax_parameters)
-                meta = ng.progress_state_of_infection(meta, t)
-                meta = progress_state_of_vaccination(meta, t)
-                meta = ng.seek_treatment(pop_parameters, inf_parameters, meta, partner_matrix, t)
-                return meta
-
-
-        # Where the effect is to reduce symptoms
-        elif vax_parameters['effect'] == 2:
-
-
-            # Situation where vaccines given during treatment and result in
-            # people being more likely to be asymptomatic
-            def update_infections(t, pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix):
-                meta = vax_at_debut(vax_parameters, meta, t)
-                meta = progress_state_of_vaccination(meta, t)
-                meta = ng.new_infections(pop_parameters, inf_parameters, meta, partner_matrix, t, 
-                                         symptoms_prob = symptoms_vax,
-                                         vax_parameters = vax_parameters)
-                meta = ng.progress_state_of_infection(meta, t)
-                meta = progress_state_of_vaccination(meta, t)
-                meta = ng.seek_treatment(pop_parameters, inf_parameters, meta, partner_matrix, t)
-                return meta
-
-
-        # Where the effect is the reduce the duration of infection
-        elif vax_parameters['effect'] == 3:
-
-
-            # Situation where vaccines given during treatment and result in
-            # people having a shorter duration of infection
-            def update_infections(t, pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix):
-                meta = vax_at_debut(vax_parameters, meta, t)
-                meta = progress_state_of_vaccination(meta, t)
-                meta = ng.new_infections(pop_parameters, inf_parameters, meta, partner_matrix, t, 
-                                         duration_mod = duration_vax,
-                                         vax_parameters = vax_parameters)
-                meta = ng.progress_state_of_infection(meta, t)
-                meta = progress_state_of_vaccination(meta, t)
-                meta = ng.seek_treatment(pop_parameters, inf_parameters, meta, partner_matrix, t)
-                return meta
-            
-            
-        # Where the effect includes all of the above
-        elif vax_parameters['effect'] == 4:
-            
-            
-            # Situation where vaccines have a combination of all of the
-            # above effects
-            def update_infections(t, pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix):
-                meta = vax_at_debut(vax_parameters, meta, t)
-                meta = progress_state_of_vaccination(meta, t)
-                meta = ng.new_infections(pop_parameters, inf_parameters, meta, partner_matrix, t, 
-                                         trans_prob_fun = vaccine_reduced_trans_and_inf_prob, 
-                                         symptoms_prob = symptoms_vax,
-                                         duration_mod = duration_vax,
-                                         vax_parameters = vax_parameters)
-                meta = ng.progress_state_of_infection(meta, t)
-                meta = progress_state_of_vaccination(meta, t)
-                meta = ng.seek_treatment(pop_parameters, inf_parameters, meta, partner_matrix, t)
-                return meta
-            
-            
-    ##########################################
-    ##  ALL EFFECTS WITH DEPLOYMENT MODE 2  ##
-    ##########################################
-    
-    
-    # Where distribution occurs at the age of 16
-    elif vax_parameters['deployment'] == 2:
-
-
-        # Where the effect is total immunity
-        if vax_parameters['effect'] == 0:
-
-
-            # Situation where vaccinations given during treatment and makes people immune
-            def update_infections(t, pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix):
-                meta = vax_by_targets(vax_parameters, meta, t)
-                meta = progress_state_of_vaccination(meta, t)
-                meta = ng.new_infections(pop_parameters, inf_parameters, meta, partner_matrix, t, 
-                                         trans_prob_fun = vaccine_reduced_infection_prob, 
-                                         vax_parameters = vax_parameters)
-                meta = ng.progress_state_of_infection(meta, t)
-                meta = progress_state_of_vaccination(meta, t)
-                meta = ng.seek_treatment(pop_parameters, inf_parameters, meta, partner_matrix, t)
-                return meta
-
-
-        # Where the effect is to reduce transmission
-        elif vax_parameters['effect'] == 1:
-
-
-            # Situation where vaccines given during treatment and result is to
-            # decrease transmission probability
-            def update_infections(t, pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix):
-                meta = vax_by_targets(vax_parameters, meta, t)
-                meta = progress_state_of_vaccination(meta, t)
-                meta = ng.new_infections(pop_parameters, inf_parameters, meta, partner_matrix, t, 
-                                         trans_prob_fun = vaccine_reduced_trans_prob, 
-                                         vax_parameters = vax_parameters)
-                meta = ng.progress_state_of_infection(meta, t)
-                meta = progress_state_of_vaccination(meta, t)
-                meta = ng.seek_treatment(pop_parameters, inf_parameters, meta, partner_matrix, t)
-                return meta
-
-
-        # Where the effect is to reduce symptoms
-        elif vax_parameters['effect'] == 2:
-
-
-            # Situation where vaccines given during treatment and result in
-            # people being more likely to be asymptomatic
-            def update_infections(t, pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix):
-                meta = vax_by_targets(vax_parameters, meta, t)
-                meta = progress_state_of_vaccination(meta, t)
-                meta = ng.new_infections(pop_parameters, inf_parameters, meta, partner_matrix, t, 
-                                         symptoms_prob = symptoms_vax,
-                                         vax_parameters = vax_parameters)
-                meta = ng.progress_state_of_infection(meta, t)
-                meta = progress_state_of_vaccination(meta, t)
-                meta = ng.seek_treatment(pop_parameters, inf_parameters, meta, partner_matrix, t)
-                return meta
-
-
-        # Where the effect is the reduce the duration of infection
-        elif vax_parameters['effect'] == 3:
-
-
-            # Situation where vaccines given during treatment and result in
-            # people having a shorter duration of infection
-            def update_infections(t, pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix):
-                meta = vax_by_targets(vax_parameters, meta, t)
-                meta = progress_state_of_vaccination(meta, t)
-                meta = ng.new_infections(pop_parameters, inf_parameters, meta, partner_matrix, t, 
-                                         duration_mod = duration_vax,
-                                         vax_parameters = vax_parameters)
-                meta = ng.progress_state_of_infection(meta, t)
-                meta = progress_state_of_vaccination(meta, t)
-                meta = ng.seek_treatment(pop_parameters, inf_parameters, meta, partner_matrix, t)
-                return meta
-            
-            
-        # Where the effect includes all of the above
-        elif vax_parameters['effect'] == 4:
-            
-            
-            # Situation where vaccines have a combination of all of the
-            # above effects
-            def update_infections(t, pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix):
-                meta = vax_by_targets(vax_parameters, meta, t)
-                meta = progress_state_of_vaccination(meta, t)
-                meta = ng.new_infections(pop_parameters, inf_parameters, meta, partner_matrix, t, 
-                                         trans_prob_fun = vaccine_reduced_trans_and_inf_prob, 
-                                         symptoms_prob = symptoms_vax,
-                                         duration_mod = duration_vax,
-                                         vax_parameters = vax_parameters)
-                meta = ng.progress_state_of_infection(meta, t)
-                meta = progress_state_of_vaccination(meta, t)
-                meta = ng.seek_treatment(pop_parameters, inf_parameters, meta, partner_matrix, t)
-                return meta
-            
-            
-    ##########################################
     ##  ALL EFFECTS WITH DEPLOYMENT MODE 3  ##
     ##########################################
     
     
-    # Where distribution occurs at the age of 16
-    elif vax_parameters['deployment'] == 3:
-
-
-        # Where the effect is total immunity
-        if vax_parameters['effect'] == 0:
-
-
-            # Situation where vaccinations given during treatment and makes people immune
+    # Assume all vaccine scenarios run from the multi-effect channels
+    if (vax_parameters['deployment'] == 3) &  (vax_parameters['effect'] == 4):
+            
+            
+            # This is the sequencing of code which will result in the desired 
+            # effects being implemented
             def update_infections(t, pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix):
                 meta = vax_at_debut(vax_parameters, meta, t)
                 meta = vax_by_targets(vax_parameters, meta, t)
                 meta = progress_state_of_vaccination(meta, t)
                 meta = ng.new_infections(pop_parameters, inf_parameters, meta, partner_matrix, t, 
-                                         trans_prob_fun = vaccine_reduced_infection_prob, 
-                                         vax_parameters = vax_parameters)
-                meta = ng.progress_state_of_infection(meta, t)
-                meta = progress_state_of_vaccination(meta, t)
-                meta = seek_treatment(pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix, t)
-                return meta
-
-
-        # Where the effect is to reduce transmission
-        elif vax_parameters['effect'] == 1:
-
-
-            # Situation where vaccines given during treatment and result is to
-            # decrease transmission probability
-            def update_infections(t, pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix):
-                meta = vax_at_debut(vax_parameters, meta, t)
-                meta = vax_by_targets(vax_parameters, meta, t)
-                meta = progress_state_of_vaccination(meta, t)
-                meta = ng.new_infections(pop_parameters, inf_parameters, meta, partner_matrix, t, 
-                                         trans_prob_fun = vaccine_reduced_trans_prob, 
-                                         vax_parameters = vax_parameters)
-                meta = ng.progress_state_of_infection(meta, t)
-                meta = progress_state_of_vaccination(meta, t)
-                meta = seek_treatment(pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix, t)
-                return meta
-
-
-        # Where the effect is to reduce symptoms
-        elif vax_parameters['effect'] == 2:
-
-
-            # Situation where vaccines given during treatment and result in
-            # people being more likely to be asymptomatic
-            def update_infections(t, pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix):
-                meta = vax_at_debut(vax_parameters, meta, t)
-                meta = vax_by_targets(vax_parameters, meta, t)
-                meta = progress_state_of_vaccination(meta, t)
-                meta = ng.new_infections(pop_parameters, inf_parameters, meta, partner_matrix, t, 
-                                         symptoms_prob = symptoms_vax,
-                                         vax_parameters = vax_parameters)
-                meta = ng.progress_state_of_infection(meta, t)
-                meta = progress_state_of_vaccination(meta, t)
-                meta = seek_treatment(pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix, t)
-                return meta
-
-
-        # Where the effect is the reduce the duration of infection
-        elif vax_parameters['effect'] == 3:
-
-
-            # Situation where vaccines given during treatment and result in
-            # people having a shorter duration of infection
-            def update_infections(t, pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix):
-                meta = vax_at_debut(vax_parameters, meta, t)
-                meta = vax_by_targets(vax_parameters, meta, t)
-                meta = progress_state_of_vaccination(meta, t)
-                meta = ng.new_infections(pop_parameters, inf_parameters, meta, partner_matrix, t, 
-                                         duration_mod = duration_vax,
-                                         vax_parameters = vax_parameters)
+                                          trans_prob_fun = vaccine_reduced_trans_and_inf_prob, 
+                                          symptoms_prob = symptoms_vax,
+                                          duration_mod = duration_vax,
+                                          vax_parameters = vax_parameters)
                 meta = ng.progress_state_of_infection(meta, t)
                 meta = progress_state_of_vaccination(meta, t)
                 meta = seek_treatment(pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix, t)
                 return meta
             
             
-        # Where the effect includes all of the above
-        elif vax_parameters['effect'] == 4:
-            
-            
-            # Situation where vaccines have a combination of all of the
-            # above effects
-            def update_infections(t, pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix):
-                meta = vax_at_debut(vax_parameters, meta, t)
-                meta = vax_by_targets(vax_parameters, meta, t)
-                meta = progress_state_of_vaccination(meta, t)
-                meta = ng.new_infections(pop_parameters, inf_parameters, meta, partner_matrix, t, 
-                                         trans_prob_fun = vaccine_reduced_trans_and_inf_prob, 
-                                         symptoms_prob = symptoms_vax,
-                                         duration_mod = duration_vax,
-                                         vax_parameters = vax_parameters)
-                meta = ng.progress_state_of_infection(meta, t)
-                meta = progress_state_of_vaccination(meta, t)
-                meta = seek_treatment(pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix, t)
-                return meta
+    # Put in an error check just for fun
+    else:
+        print('ERROR: Please implement vacine deployment and effects through options 4 and 3, respectively.')
+        update_infections = []
 
     
     # Done
@@ -624,17 +268,18 @@ def seek_treatment(pop_parameters, parameters, vax_parameters, meta, partner_mat
 
     
     # Run the seek treatment function from ng but ask for the index values of those
-    # who are treated in response
-    meta, treat = ng.seek_treatment(pop_parameters, parameters, meta, partner_matrix, t, return_treated_ids=True)
+    # who are tested in response
+    meta, vax = ng.seek_treatment(pop_parameters, parameters, meta, partner_matrix, t, return_tested_ids=True, project=True)
     
     
-    # People getting treated who haven't been vaccinated yet get a vaccine
-    vax = treat[np.isinf(meta.vaccination_t0[treat])]
+    # But not all of them
+    u = np.random.random(len(vax)) <= vax_parameters['p_test_to_vax']
     
 
     # Implement vaccinations
     if len(vax) > 0:
-        meta = give_vaccine(vax_parameters, meta, t, vax)
+        meta = give_vaccine(vax_parameters, meta, t, vax[u])
+        meta.loc[vax[u], 'vaccine_source'] = int(1)
 
 
     # Done
@@ -649,23 +294,27 @@ def seek_treatment(pop_parameters, parameters, vax_parameters, meta, partner_mat
 # What happens when somebody is vaccinated 
 #
 #
-def give_vaccine(vax_parameters, meta, t, treat):
+def give_vaccine(vax_parameters, meta, t, vax):
+    
+    
+    # Must be unvaccinated
+    vax = vax[np.isinf(meta.vaccination_t0[vax])]
 
 
     # Decide which vaccinations are effective
-    uu = np.random.random(len(treat))
+    uu = np.random.random(len(vax))
     uu = uu < vax_parameters['prop_effective']
 
 
     # Update their vaccination data
-    meta.loc[treat[uu], 'vaccinated'] = True
-    meta.loc[treat[uu], 'vaccination_t0'] = t
-    meta.loc[treat[uu], 'vaccination_t1'] = t + vaccination_duration(vax_parameters, len(treat[uu]))
+    meta.loc[vax[uu], 'vaccinated'] = True
+    meta.loc[vax[uu], 'vaccination_t0'] = t
+    meta.loc[vax[uu], 'vaccination_t1'] = t + vaccination_duration(vax_parameters, len(vax[uu]))
 
 
     # Set booster time
-    meta.loc[treat[uu], 'booster_t0'] = t + vax_parameters['booster_delay']
-    meta.loc[treat[uu], 'booster_t1'] = t + vax_parameters['booster_delay'] + vaccination_duration(vax_parameters, len(treat[uu]))
+    meta.loc[vax[uu], 'booster_t0'] = t + vax_parameters['booster_delay']
+    meta.loc[vax[uu], 'booster_t1'] = t + vax_parameters['booster_delay'] + vaccination_duration(vax_parameters, len(vax[uu]))
 
 
     # Pass back meta
@@ -942,8 +591,13 @@ def vax_at_debut(vax_parameters, meta, t):
     vax = meta.index[meta.age <= (16 + 1/365)]
     
     
+    # But only vaccinate a certain proportion
+    u = np.random.random(len(vax)) <= vax_parameters['p_vax_16']
+    
+    
     # Vaccinate them
-    meta = give_vaccine(vax_parameters, meta, t, vax)
+    meta = give_vaccine(vax_parameters, meta, t, vax[u])
+    meta.loc[vax[u], 'vaccine_source'] = int(2)
     
     
     # Done
@@ -971,12 +625,12 @@ def vax_by_targets(vax_parameters, meta, t):
         
         # Compute proportion vaccinated
         unvax = np.isinf(who.vaccination_t0)
-        prop = np.sum(unvax)/len(who)
+        prop = 1 - (np.sum(unvax)/len(who))
         
         
         # Target to vaccinate
         target = vax_parameters['prop_vax_' + str(age)] - prop
-        target = max(0, target/14)
+        target = max(0, target/365)
         
         
         # Sample people to vaccinate
@@ -989,33 +643,11 @@ def vax_by_targets(vax_parameters, meta, t):
     
     # Give the vaccines
     meta = give_vaccine(vax_parameters, meta, t, vax)
+    meta.loc[vax, 'vaccine_source'] = int(3)
     
     
     # Done
     return meta
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -1030,12 +662,20 @@ def initilise_tracking_data(n):
     inft = np.zeros((n, 8))
     prvt = np.zeros((n, 13))
     tstt = np.zeros((n, 9))
+    
+    pop_size = np.zeros((n, 10*3))
+    partners = np.zeros((n, 10*4))
+    states = np.zeros((n, 10*6))
+    sites = np.zeros((n, 10*8))
+    testing = np.zeros((n, 10*4))
+    vax = np.zeros((n, 10*4))
     # Initlise variables for making graphs
     # if make_graphs:
     #     partners_cohort, partners_risk, partners_cum_risk, partners_cum_age, partners_cum_tot = prt.initilise_partnership_trackers(n_steps)
     #     compartments_demo, import_count, export_count, demographic, import_time, active_age = demo.initilise_demographic_trackers(n_steps, t0_sim = t0_sim)
     #     inf_tracker = ng.initilise_infection_trackers(n_steps)
-    inf_tracker = {'yt': yt, 'inft': inft, 'prvt': prvt, 'tstt': tstt}
+    inf_tracker = {'yt': yt, 'inft': inft, 'prvt': prvt, 'tstt': tstt, 'pop_size': pop_size, 'partners': partners, 'states': states, \
+                   'sites': sites, 'testing': testing, 'vax': vax}
     return inf_tracker
     
     
@@ -1046,7 +686,7 @@ def initilise_tracking_data(n):
 # A function which updates the arrays used to track transmission
 #
 #
-def update_tracking_data(meta, t0_sim, t, inf_tracker):
+def update_tracking_data(meta, partner_matrix, t0_sim, t, inf_tracker):
     
     
     # Extract trackers
@@ -1054,13 +694,22 @@ def update_tracking_data(meta, t0_sim, t, inf_tracker):
     inft = inf_tracker['inft']
     prvt = inf_tracker['prvt']
     tstt = inf_tracker['tstt']
+    pop_size = inf_tracker['pop_size']
+    partners = inf_tracker['partners']
+    states = inf_tracker['states']
+    sites = inf_tracker['sites']
+    testing = inf_tracker['testing']
+    vax = inf_tracker['vax']
+    
+    
+    ##  UPDATE AGGREGATE TRACKERS
     
     
     # Compute the current population size
     n = len(meta)
     
     
-    # Compute proportion of population in each category
+    # Aggregate infectious state tracker
     yt[t,:] = [sum(meta.state == 'S')/n,
                sum(meta.state == 'E')/n,
                sum(meta.state == 'I')/n,
@@ -1070,7 +719,7 @@ def update_tracking_data(meta, t0_sim, t, inf_tracker):
                sum(meta.boosted)/n]
     
     
-    # Compute the proportion of the population with an infection by anatomical site
+    # Aggregate anatomical-site specific infection tracker
     site0 = meta.site0 == 1
     site1 = meta.site1 == 1
     site2 = meta.site2 == 1
@@ -1084,7 +733,7 @@ def update_tracking_data(meta, t0_sim, t, inf_tracker):
                 sum( site0 & site1 & site2 )/n]
     
     
-    # Compute comparisons to STRIVE data - prevalence of urethral infections by sub-populations
+    # Prevalence aggregate and by sub-population
     I = meta.state == 'I'
     males = meta.gender == 1
     prvt[t,:] = [sum(I)/n,
@@ -1102,7 +751,7 @@ def update_tracking_data(meta, t0_sim, t, inf_tracker):
                  sum(I & (~males) & (meta.age_group == 3) & (meta.age > 35))/max(1, sum( (~males) & (meta.age_group == 3) & (meta.age > 35) ))]
     
     
-    # Compute the proportion of the population who have tested in the last 365 days
+    # Testing rates aggregate and by sub-population
     tested = meta.test_time_last >= (t+t0_sim-365)
     tstt[t,:] = [np.sum(tested) / n,
                  np.sum((males & tested) & (meta.test_reason_last == int(1))) / np.sum(males),
@@ -1115,12 +764,94 @@ def update_tracking_data(meta, t0_sim, t, inf_tracker):
                  np.sum(~males & tested) / np.sum(~males),
                  ]
     
+
+    ##  UPDATE SUB-COHORT TRACKERS
+
+    
+    # Initilise indexes
+    ii_pop_size = 0
+    ii_partners = 0
+    ii_states = 0
+    ii_sites = 0
+    ii_test = 0
+    ii_vax = 0
+    
+    
+    # Population size
+    for a in [0, 1, 2, 3, 4]:
+        for g in [0, 1]:
+            
+            
+            # Extract relevent population
+            who = meta.loc[(meta.age_group == a) & (meta.gender == g), :]
+            n = len(who)
+            
+            
+            # Compute population size
+            pop_size[t, ii_pop_size] = n
+            pop_size[t, ii_pop_size + 1] = np.sum((who.import_time <= t0_sim))
+            pop_size[t, ii_pop_size + 2] = np.sum((who.import_time > t0_sim))
+            ii_pop_size = ii_pop_size + 3
+            
+            
+            # Compute the number of partners
+            pmatrow = np.sum(partner_matrix[who.index, 0:len(meta)], axis = 1)
+            partners[t, ii_partners] = np.sum(pmatrow == 0)/n
+            partners[t, ii_partners + 1] = np.sum((pmatrow == 1) & (who.partner != -1))/n
+            partners[t, ii_partners + 2] = np.sum((pmatrow == 1) & (who.partner == -1))/n
+            partners[t, ii_partners + 3] = np.sum(pmatrow > 1)/n
+            ii_partners = ii_partners + 4
+            
+            
+            # Compute infectious state
+            states[t, ii_states] = np.sum(who.state == 'S')/n
+            states[t, ii_states + 1] = np.sum(who.state == 'E')/n
+            states[t, ii_states + 2] = np.sum(who.state == 'I')/n
+            states[t, ii_states + 3] = np.sum(who.state == 'T')/n
+            states[t, ii_states + 4] = np.sum(who.vaccinated)/n
+            states[t, ii_states + 5] = np.sum(who.boosted)/n
+            ii_states = ii_states + 6
+
+
+            # Compute infection prevalence by anatomical-site
+            sites[t, ii_sites] = np.sum(who.site0 & ~who.site1 & ~who.site2)/n
+            sites[t, ii_sites + 1] = np.sum(~who.site0 & who.site1 & ~who.site2)/n
+            sites[t, ii_sites + 2] = np.sum(~who.site0 & ~who.site1 & who.site2)/n
+            sites[t, ii_sites + 3] = np.sum(who.site0 & who.site1 & ~who.site2)/n
+            sites[t, ii_sites + 4] = np.sum(who.site0 & ~who.site1 & who.site2)/n
+            sites[t, ii_sites + 5] = np.sum(~who.site0 & who.site1 & who.site2)/n
+            sites[t, ii_sites + 6] = np.sum(who.site0 & who.site1 & who.site2)/n
+            ii_sites = ii_sites + 7
+            
+            
+            # Compute testing rates
+            last_365 = who.loc[(t + t0_sim - who.test_time_last) <= 365, ]
+            testing[t, ii_test] = (len(last_365))/n
+            testing[t, ii_test + 1] = np.sum(last_365.test_reason_last == int(1))/n
+            testing[t, ii_test + 2] = np.sum(last_365.test_reason_last == int(2))/n
+            testing[t, ii_test + 3] = np.sum(last_365.test_reason_last == int(3))/n
+            ii_test = ii_test + 4
+            
+            
+            # Compute vaccination rates by source
+            vax[t, ii_vax] = np.sum((who.vaccination_t0 <= (t0_sim + t)) | (who.booster_t0 <= (t0_sim + t)))/n
+            vax[t, ii_vax + 1] = np.sum(((who.vaccination_t0 <= (t0_sim + t)) | (who.booster_t0 <= (t0_sim + t))) & (who.vaccine_source == int(1)))/n
+            vax[t, ii_vax + 2] = np.sum(((who.vaccination_t0 <= (t0_sim + t)) | (who.booster_t0 <= (t0_sim + t))) & (who.vaccine_source == int(2)))/n
+            vax[t, ii_vax + 3] = np.sum(((who.vaccination_t0 <= (t0_sim + t)) | (who.booster_t0 <= (t0_sim + t))) & (who.vaccine_source == int(3)))/n
+            ii_vax = ii_vax + 4
+    
     
     # Rebundle trackers
     inf_tracker.update({'yt': yt})
     inf_tracker.update({'inft': inft})
     inf_tracker.update({'prvt': prvt})
     inf_tracker.update({'tstt': tstt})
+    inf_tracker.update({'pop_size': pop_size})
+    inf_tracker.update({'partners': partners})
+    inf_tracker.update({'states': states})
+    inf_tracker.update({'sites': sites})
+    inf_tracker.update({'testing': testing})
+    inf_tracker.update({'vax': vax})
     
     
     # Done
@@ -1135,7 +866,7 @@ def update_tracking_data(meta, t0_sim, t, inf_tracker):
 # Makes graphs
 #
 #
-def make_tracking_graphs(tt, sim, inf_tracker, out_dir):
+def make_tracking_graphs(pop_parameters, tt, sim, inf_tracker, out_dir):
     
     
     # Extract trackers
@@ -1143,247 +874,904 @@ def make_tracking_graphs(tt, sim, inf_tracker, out_dir):
     inft = inf_tracker['inft']
     prvt = inf_tracker['prvt']
     tstt = inf_tracker['tstt']
+    pop_size = inf_tracker['pop_size']
+    partners = 100 * inf_tracker['partners']
+    states = 100 * inf_tracker['states']
+    sites = 100 * inf_tracker['sites']
+    testing = 100 * inf_tracker['testing']
+    vax = 100 * inf_tracker['vax']
+    t_plot = range(0, len(tt))
+    
+    
+    #%%  AGGREGATE INFECTION GRAPH
     
 
     # Plot aggregate infection levels
     new_fig = plt.figure(figsize = [12, 8])
     yt = 100 * yt
-    plt.plot(tt, yt[:,0], label = 'S')
-    plt.plot(tt, yt[:,1], label = 'E')
-    plt.plot(tt, yt[:,2], label = 'I')
-    plt.plot(tt, yt[:,3], label = 'R')
-    plt.plot(tt, yt[:,4], label = 'T')
-    plt.plot(tt, yt[:,5], label = 'V')
-    plt.plot(tt, yt[:,6], label = 'B')
-    plt.title('Proportion of the Population in Each Model Compartment (Parameter Set ' + str(sim) + ')')
+    plt.plot(t_plot, yt[:,0], label = 'Susceptible')
+    plt.plot(t_plot, yt[:,1], label = 'Exposed')
+    plt.plot(t_plot, yt[:,2], label = 'Infectious')
+    # plt.plot(t_plot, yt[:,3], label = 'R')
+    plt.plot(t_plot, yt[:,4], label = 'Protected - treatment')
+    plt.plot(t_plot, yt[:,5], label = 'Protected - vaccination')
+    plt.plot(t_plot, yt[:,6], label = 'Boosted')
+    plt.title('Agregate Infeecton Dynamics and Vaccination Rates (Simulation ' + str(sim) + ')')
     plt.legend()
-    plt.xlabel('Global Simulation Timestep')
+    plt.xlabel('Time Since Start of Vaccination Program (days)')
     plt.ylabel('Proportion of Population (%)')
-    plt.savefig(out_dir + 'graph_aggregate_infections.png')
+    plt.savefig(out_dir + 'graph_aggregate_infections.png', bbox_inches='tight')
     plt.close(new_fig)
-
+    
+    
+    #%% AGGREGATE COHORT SIZE GRAPH
+    
 
     # # Plot the number in each age group
     # new_fig = plt.figure(figsize = [12, 8])
-    # plt.plot(tt, popt[:,0], label = '16-19')
-    # plt.plot(tt, popt[:,1], label = '20-24')
-    # plt.plot(tt, popt[:,2], label = '25-30')
-    # plt.plot(tt, popt[:,3], label = 'Over 30')
-    # plt.plot(tt, np.sum(popt, axis = 1), label = 'Total')
-    # plt.title('Number of People in Each Age Group (Parameter Set ' + str(sim) +')')
+    # plt.plot(t_plot, popt[:,0], label = '16-19')
+    # plt.plot(t_plot, popt[:,1], label = '20-24')
+    # plt.plot(t_plot, popt[:,2], label = '25-30')
+    # plt.plot(t_plot, popt[:,3], label = 'Over 30')
+    # plt.plot(t_plot, np.sum(popt, axis = 1), label = 'Total')
+    # plt.title('Number of People in Each Age Group (Simulation ' + str(sim) +')')
     # plt.xlabel('Global Simulation Timestep')
     # plt.ylabel('Number of Individuals')
     # plt.legend()
-    # plt.savefig(out_dir + '_graph_age_group.png')
+    # plt.savefig(out_dir + '_graph_age_group.png', bbox_inches='tight')
     # plt.close()
-
+    
+    
+    #%% AGGREGATE PARTER NUMBER GRAPHS
+    
 
     # # Plot the number in a long term relationship
-    # plt.plot(tt, part[:,0], label = 'Single')
-    # plt.plot(tt, popt[:,1], label = 'Long-term relationship')
-    # plt.title('Long-term Relationships - Parameter Set ' + str(sim))
+    # plt.plot(t_plot, part[:,0], label = 'Single')
+    # plt.plot(t_plot, popt[:,1], label = 'Long-term relationship')
+    # plt.title('Long-term Relationships - Simulation ' + str(sim))
     # plt.legend()
-    # plt.savefig(file_name + '_long_term_relationships.png')
+    # plt.savefig(file_name + '_long_term_relationships.png', bbox_inches='tight')
     # plt.close()
+    
+    
+    #%% AGGREGATE INFECTIONS BY ANATOMICAL SITE
 
 
     # Graph of infections by anatomical site
     # Setup graph
     fig, axs = plt.subplots(3, 1, figsize = [12, 8])
     fig.tight_layout(rect=[0, 0.03, 1, 0.95])
-    plt.suptitle('Proportion of Population with Infection by Anatomical-Site (Parameter Set ' + str(sim) + ')')
+    plt.suptitle('Aggregate Prevalence of Infections by Anatomical Site (Simulation ' + str(sim) + ')')
     
     
     # make first pannel
     inft = 100 * inft
-    axs[0].plot(tt, inft[:,1] + inft[:,4] + inft[:,6] + inft[:,7], label = 'Rectal')
-    axs[0].plot(tt, inft[:,2] + inft[:,4] + inft[:,5] + inft[:,7], label = 'Urethral')
-    axs[0].plot(tt, inft[:,3] + inft[:,5] + inft[:,6] + inft[:,7], label = 'Pharyngeal')
+    axs[0].plot(t_plot, inft[:,1] + inft[:,4] + inft[:,6] + inft[:,7], label = 'Rectal')
+    axs[0].plot(t_plot, inft[:,2] + inft[:,4] + inft[:,5] + inft[:,7], label = 'Urethral')
+    axs[0].plot(t_plot, inft[:,3] + inft[:,5] + inft[:,6] + inft[:,7], label = 'Pharyngeal')
     axs[0].legend()
     axs[0].set_title('Infections Including Each Site')
     
     
     # make second pannel
-    axs[1].plot(tt, inft[:,1], label = 'Rectal')
-    axs[1].plot(tt, inft[:,2], label = 'Urethral')
-    axs[1].plot(tt, inft[:,3], label = 'Pharyngeal')
+    axs[1].plot(t_plot, inft[:,1], label = 'Rectal')
+    axs[1].plot(t_plot, inft[:,2], label = 'Urethral')
+    axs[1].plot(t_plot, inft[:,3], label = 'Pharyngeal')
     axs[1].legend()
     axs[1].set_title('Infections at Just One Site')
     
     
     # Make third pannel
-    axs[2].plot(tt, inft[:,4], label = 'Sites Rec and Ure')
-    axs[2].plot(tt, inft[:,5], label = 'Sites Ure and Pha')
-    axs[2].plot(tt, inft[:,6], label = 'Sites Rec and Pha')
-    axs[2].plot(tt, inft[:,7], label = 'All sites')
+    axs[2].plot(t_plot, inft[:,4], label = 'Sites Rec and Ure')
+    axs[2].plot(t_plot, inft[:,5], label = 'Sites Ure and Pha')
+    axs[2].plot(t_plot, inft[:,6], label = 'Sites Rec and Pha')
+    axs[2].plot(t_plot, inft[:,7], label = 'All sites')
     axs[2].set_title('Infections at Multiple Sites')
     
     
     # Label output
     axs[2].legend()
-    axs[2].set_xlabel('Global Simulation Timestep')
+    axs[2].set_xlabel('Time Since Start of Vaccination Program (days)')
     axs[1].set_ylabel('Proportion of the Population (%)')
     
     
     # Save output
-    plt.savefig(out_dir + 'graph_anatomical_site.png')
+    plt.savefig(out_dir + 'graph_anatomical_site.png', bbox_inches='tight')
     plt.close()
 
 
-    # PLOTS OF PREVALENCE
+    #%% AGGREGATE PREVALVENCE
 
 
     # Overall prevalence
     prvt = prvt * 100
-    fig, axs = plt.subplots(3, 1)
+    fig, axs = plt.subplots(3, 1, figsize = [12, 8])
     fig.tight_layout(rect=[0, 0.03, 1, 0.95])
-    plt.suptitle('Aggregate Prevalence of Urogenetal Infections Compared to Prevalence in STRIVE (Parameter Set ' + str(sim) + ')')
+    plt.suptitle('Aggregate Prevalence of Urogenetal Infections (Simulation ' + str(sim) + ')')
     
     
     # Overall
-    axs[0].plot(tt, prvt[:,0], label = 'Simulated')
-    axs[0].plot(tt, len(tt) * [9.5], color = 'black', linestyle = '--', label = 'STRIVE')
+    axs[0].plot(t_plot, prvt[:,0], label = 'Simulated')
+    axs[0].plot(t_plot, len(t_plot) * [9.5], color = 'black', linestyle = '--', label = 'STRIVE')
     axs[0].set_title('Overall Prevalence')
     axs[0].legend()
     
     
     # Males
-    axs[1].plot(tt, prvt[:,1])
-    axs[1].plot(tt, len(tt) * [10.4], color = 'black', linestyle = '--')
+    axs[1].plot(t_plot, prvt[:,1])
+    axs[1].plot(t_plot, len(t_plot) * [10.4], color = 'black', linestyle = '--')
     axs[1].set_title('Prevalence Amongst Males')
     
     
     # Females
-    axs[2].plot(tt, prvt[:,2])
-    axs[2].plot(tt, len(tt) * [8.9], color = 'black', linestyle = '--')
+    axs[2].plot(t_plot, prvt[:,2])
+    axs[2].plot(t_plot, len(t_plot) * [8.9], color = 'black', linestyle = '--')
     axs[2].set_title('Prevalence Amongst Females')
     
     
     # Labels
-    axs[2].set_xlabel('Global Simulation Timestep')
+    axs[2].set_xlabel('Time Since Start of Vaccination Program (days)')
     axs[1].set_ylabel('Proportion of the Population (%)')
     
     
     # Save output
-    plt.savefig(out_dir + 'graph_prevalence_aggregate.png')
+    plt.savefig(out_dir + 'graph_prevalence_aggregate.png', bbox_inches='tight')
     plt.close()
+    
+    
+    #%% PREVALENCE BY AGE AND GENDER
 
 
     # Prevalence by age group and gender
-    fig, axs = plt.subplots(4, 2)
+    fig, axs = plt.subplots(4, 2, figsize = [12, 8])
     #fig.tight_layout(rect=[0, 0.03, 1, 0.95])
-    plt.suptitle('Simulated Prevalence Compared to Prevalence in STRIVE (Parameter Set ' + str(sim) + ')')
+    plt.suptitle('Prevalence of Urogenital Infections (Simulation ' + str(sim) + ')')
+    strive = pd.read_csv('data/calibration_prevalence.csv')
     
     
-    # Males
-    axs[0, 0].set_title('Males')
-    axs[0, 0].plot(tt, prvt[:,3], label = 'Simulated')
-    axs[0, 0].plot(tt, len(tt) * [21.6], color = 'black', linestyle = '--', label = 'STRIVE')
-    axs[1, 0].plot(tt, prvt[:,4])
-    axs[1, 0].plot(tt, len(tt) * [17.4], color = 'black', linestyle = '--')
-    axs[2, 0].plot(tt, prvt[:,5])
-    axs[2, 0].plot(tt, len(tt) * [11.6], color = 'black', linestyle = '--')
-    axs[3, 0].plot(tt, prvt[:,6])
-    axs[3, 0].plot(tt, len(tt) * [8.1], color = 'black', linestyle = '--')
-    
-    
-    # Females
-    axs[0, 1].set_title('Females')
-    axs[0, 1].plot(tt, prvt[:,8])
-    axs[0, 1].plot(tt, len(tt) * [20.1], color = 'black', linestyle = '--')
-    axs[1, 1].plot(tt, prvt[:,9])
-    axs[1, 1].plot(tt, len(tt) * [15.4], color = 'black', linestyle = '--')
-    axs[2, 1].plot(tt, prvt[:,10])
-    axs[2, 1].plot(tt, len(tt) * [7.3], color = 'black', linestyle = '--')
-    axs[3, 1].plot(tt, prvt[:,11])
-    axs[3, 1].plot(tt, len(tt) * [7], color = 'black', linestyle = '--')
-    
-    
-    # Axis labels
+    # Plot items
+    for a in [0, 1, 2, 3]:
+        for g in [0, 1]:
+            ii = 3 + a + 5*(g==0)
+            target = strive.loc[0, ('m' if g==1 else 'f') + str(a)]
+            axs[a, g].plot(t_plot, prvt[:, ii], label = 'Simulated')
+            axs[a, g].plot(t_plot, len(t_plot) * [target], color = 'black', linestyle = '--', label = 'STRIVE')
+            
+            
+    # Label graph
+    axs[0, 1].set_title('Males')
+    axs[0, 0].set_title('Females')
     axs[0, 0].legend
     axs[0, 0].set_ylabel('16-19')
     axs[1, 0].set_ylabel('20-24')
     axs[2, 0].set_ylabel('25-29')
     axs[3, 0].set_ylabel('30-34')
-    fig.text(0.5, 0.05, 'Global Simulation Timestep', ha='center')
-    fig.text(0.05, 0.5, 'Proportion of Sub-Populations (%)', va='center', rotation='vertical')
+    fig.text(0.5, 0.05, 'Time Since Start of Vaccination Program (days)', ha='center')
+    fig.text(0.05, 0.5, 'Proportion of Sub-Population (%)', va='center', rotation='vertical')
+    axs[3, 1].legend(loc='upper center', ncol=6, bbox_to_anchor=(-0.1, -0.5), fancybox=True)
     
     
     # Save output
-    plt.savefig(out_dir + 'graph_prevalence_age_group.png')
+    plt.savefig(out_dir + 'graph_age_gender_prevalence.png', bbox_inches='tight')
     plt.close()
     
     
-    ## PLOT OF TESTING
+    #%% AGGREGATE TESTING RATES
     
     
     # Overall testing rates
     tstt = tstt * 100
-    fig, axs = plt.subplots(3, 1)
+    fig, axs = plt.subplots(3, 1, figsize = [12, 8])
     fig.tight_layout(rect=[0, 0.03, 1, 0.95])
-    plt.suptitle('Overall Testing Rates Compared to Mean Testing Rates in STRIVE (Parameter Set ' + str(sim) + ')')
+    plt.suptitle('Aggregate Testing Rates (Simulation ' + str(sim) + ')')
     
     
     # Overall
-    axs[0].plot(tt, tstt[:,0], label = 'Simulated')
-    axs[0].plot(tt, len(tt) * [17.6], color = 'black', linestyle = '--', label = 'STRIVE')
+    axs[0].plot(t_plot, tstt[:,0], label = 'Simulated')
+    axs[0].plot(t_plot, len(t_plot) * [17.6], color = 'black', linestyle = '--', label = 'STRIVE')
     axs[0].set_title('Overall Prevalence')
     axs[0].legend()
     
     
     # Males
-    axs[1].plot(tt, tstt[:,4], label = 'Overall')
-    axs[1].plot(tt, tstt[:,1], label = 'Symptoms')
-    axs[1].plot(tt, tstt[:,2], label = 'Background')
-    axs[1].plot(tt, tstt[:,3], label = 'Contact Tracing')
-    axs[1].plot(tt, len(tt) * [13.4], color = 'black', linestyle = '--')
+    axs[1].plot(t_plot, tstt[:,4], label = 'Overall')
+    axs[1].plot(t_plot, tstt[:,1], label = 'Symptoms')
+    axs[1].plot(t_plot, tstt[:,2], label = 'Background')
+    axs[1].plot(t_plot, tstt[:,3], label = 'Contact Tracing')
+    axs[1].plot(t_plot, len(t_plot) * [13.4], color = 'black', linestyle = '--')
     axs[1].set_title('Testing Rates Amongst Males by Reason for Last Test')
     
     
     # Females
-    axs[2].plot(tt, tstt[:,8], label = 'Overall')
-    axs[2].plot(tt, tstt[:,5], label = 'Symptoms')
-    axs[2].plot(tt, tstt[:,6], label = 'Background')
-    axs[2].plot(tt, tstt[:,7], label = 'Contact Tracing')
-    axs[2].plot(tt, len(tt) * [21.8], color = 'black', linestyle = '--')
+    axs[2].plot(t_plot, tstt[:,8], label = 'Overall')
+    axs[2].plot(t_plot, tstt[:,5], label = 'Symptoms')
+    axs[2].plot(t_plot, tstt[:,6], label = 'Background')
+    axs[2].plot(t_plot, tstt[:,7], label = 'Contact Tracing')
+    axs[2].plot(t_plot, len(t_plot) * [21.8], color = 'black', linestyle = '--')
     axs[2].set_title('Testing Rates Amongst Females by Reason for Last Test')
     
     
     # Labels
-    axs[2].set_xlabel('Global Simulation Timestep')
+    axs[2].set_xlabel('Time Since Start of Vaccination Program (days)')
     axs[1].set_ylabel('Proportion of Sub-Population (%)')
     axs[1].legend()
     
     
     # Save output
-    plt.savefig(out_dir + 'graph_testing_rates.png')
+    plt.savefig(out_dir + 'graph_testing_rates.png', bbox_inches='tight')
+    plt.close()
+    
+    
+    #%% SUB_POPULATION COHORT SIZE
+    
+    
+    # Set_plotup graph
+    fig, axs = plt.subplots(4, 2, figsize = [12, 8])
+    fig.tight_layout(rect=[0, 0.03, 1, 0.95])
+    plt.suptitle('Number of Individuals in Each Cohort (Simulation ' + str(sim) + ')')
+    
+    
+    # Plot items
+    ii = 0
+    for a in [0, 1, 2, 3]:
+        for g in [0, 1]:
+            axs[a, g].plot(t_plot, pop_size[:, ii], label = 'Total')
+            axs[a, g].plot(t_plot, pop_size[:, ii + 2], label = 'Imported Since Start of Simulation')
+            ii = ii + 3
+            
+            
+    # Label graph
+    axs[0, 1].set_title('Males')
+    axs[0, 0].set_title('Females')
+    axs[0, 0].legend()
+    axs[0, 0].set_ylabel('16-19')
+    axs[1, 0].set_ylabel('20-24')
+    axs[2, 0].set_ylabel('25-29')
+    axs[3, 0].set_ylabel('30-34')
+    fig.text(0.5, 0.01, 'Time Since Start of Vaccination Program (days)', ha='center')
+    fig.text(-0.02, 0.5, 'Number of Individuals', va='center', rotation='vertical')
+    axs[3, 1].legend(loc='upper center', ncol=6, bbox_to_anchor=(-0.1, -0.5), fancybox=True)
+    
+    
+    # Save output
+    plt.savefig(out_dir + 'graph_age_gender_pop_size.png', bbox_inches='tight')
+    plt.close()
+    
+    
+    #%% SUB_POPULATION PARTNERS
+    
+    
+    # Set_plotup graph
+    fig, axs = plt.subplots(4, 2, figsize = [12, 8])
+    fig.tight_layout(rect=[0, 0.03, 1, 0.95])
+    plt.suptitle('Proportion of the Population in Each Type of Partnership (Simulation ' + str(sim) + ')')
+    
+    
+    # Plot items
+    ii = 0
+    for a in [0, 1, 2, 3]:
+        for g in [0, 1]:
+            axs[a, g].plot(t_plot, partners[:, ii], label = 'No partner')
+            axs[a, g].plot(t_plot, partners[:, ii + 1], label = 'Long-term partner')
+            axs[a, g].plot(t_plot, partners[:, ii + 2], label = 'Short-term partner')
+            axs[a, g].plot(t_plot, partners[:, ii + 3], label = 'More than one partner')
+            ii = ii + 4
+            
+            
+    # Label graph
+    axs[0, 1].set_title('Males')
+    axs[0, 0].set_title('Females')
+    axs[0, 0].set_ylabel('16-19')
+    axs[1, 0].set_ylabel('20-24')
+    axs[2, 0].set_ylabel('25-29')
+    axs[3, 0].set_ylabel('30-34')
+    fig.text(0.5, 0.01, 'Time Since Start of Vaccination Program (days)', ha='center')
+    fig.text(-0.02, 0.5, 'Proportion of Sub-Population (%)', va='center', rotation='vertical')
+    axs[3, 1].legend(loc='upper center', ncol=6, bbox_to_anchor=(-0.1, -0.5), fancybox=True)
+    
+    
+    # Save output
+    plt.savefig(out_dir + 'graph_age_gender_partners.png', bbox_inches='tight')
+    plt.close()
+    
+    
+    #%% SUB_POPULATION STATES
+    
+    
+    # Set_plotup graph
+    fig, axs = plt.subplots(4, 2, figsize = [12, 8])
+    fig.tight_layout(rect=[0, 0.03, 1, 0.95])
+    plt.suptitle('Infection Dynamics and Vaccine Protection (Simulation ' + str(sim) + ')')
+    
+    
+    # Plot items
+    ii = 0
+    for a in [0, 1, 2, 3]:
+        for g in [0, 1]:
+            axs[a, g].plot(t_plot, states[:, ii], label = 'Susceptible')
+            axs[a, g].plot(t_plot, states[:, ii + 1], label = 'Exposed')
+            axs[a, g].plot(t_plot, states[:, ii + 2], label = 'Infectious')
+            axs[a, g].plot(t_plot, states[:, ii + 3], label = 'Treated')
+            axs[a, g].plot(t_plot, states[:, ii + 4], label = 'Vaccined')
+            axs[a, g].plot(t_plot, states[:, ii + 5], label = 'Boosted')
+            ii = ii + 6
+            
+            
+    # Label graph
+    axs[0, 1].set_title('Males')
+    axs[0, 0].set_title('Females')
+    axs[0, 0].set_ylabel('16-19')
+    axs[1, 0].set_ylabel('20-24')
+    axs[2, 0].set_ylabel('25-29')
+    axs[3, 0].set_ylabel('30-34')
+    fig.text(0.5, 0.01, 'Time Since Start of Vaccination Program (days)', ha='center')
+    fig.text(-0.02, 0.5, 'Proportion of Sub-Population (%)', va='center', rotation='vertical')
+    axs[3, 1].legend(loc='upper center', ncol=6, bbox_to_anchor=(-0.1, -0.5), fancybox=True)
+    
+    
+    # Save output
+    plt.savefig(out_dir + 'graph_age_gender_state.png', bbox_inches='tight')
+    plt.close()
+    
+    
+    #%% SUB_POPULATION SITES
+    
+    
+    # Set_plotup graph
+    fig, axs = plt.subplots(4, 2, figsize = [12, 8])
+    fig.tight_layout(rect=[0, 0.03, 1, 0.95])
+    plt.suptitle('Prevalence of Infections by Anatomical Site (Simulation ' + str(sim) + ')')
+    
+    
+    # Plot items
+    ii = 0
+    for a in [0, 1, 2, 3]:
+        for g in [0, 1]:
+            axs[a, g].plot(t_plot, sites[:, ii], label = 'Rectal')
+            axs[a, g].plot(t_plot, sites[:, ii + 1], label = 'Urethral')
+            axs[a, g].plot(t_plot, sites[:, ii + 2], label = 'Pharyngeal')
+            axs[a, g].plot(t_plot, sites[:, ii + 3], label = 'Rec + Ure')
+            axs[a, g].plot(t_plot, sites[:, ii + 4], label = 'Rec + Pha')
+            axs[a, g].plot(t_plot, sites[:, ii + 5], label = 'Ure + Pha')
+            axs[a, g].plot(t_plot, sites[:, ii + 6], label = 'All three')
+            ii = ii + 7
+            
+            
+    # Label graph
+    axs[0, 1].set_title('Males')
+    axs[0, 0].set_title('Females')
+    axs[0, 0].set_ylabel('16-19')
+    axs[1, 0].set_ylabel('20-24')
+    axs[2, 0].set_ylabel('25-29')
+    axs[3, 0].set_ylabel('30-34')
+    fig.text(0.5, 0.01, 'Time Since Start of Vaccination Program (days)', ha='center')
+    fig.text(-0.02, 0.5, 'Proportion of Sub-Population (%)', va='center', rotation='vertical')
+    axs[3, 1].legend(loc='upper center', ncol=3, bbox_to_anchor=(-0.1, -0.5), fancybox=True)
+    
+    
+    # Save output
+    plt.savefig(out_dir + 'graph_age_gender_anatomical_site.png', bbox_inches='tight')
+    plt.close()
+    
+    
+    #%% SUB_POPULATION TESTING
+    
+    
+    # Set_plotup graph
+    fig, axs = plt.subplots(4, 2, figsize = [12, 8])
+    fig.tight_layout(rect=[0, 0.03, 1, 0.95])
+    plt.suptitle('Testing Rates (Simulation ' + str(sim) + ')')
+    
+    
+    # Plot items
+    ii = 0
+    for a in [0, 1, 2, 3]:
+        for g in [0, 1]:
+            target = pop_parameters['testing_rates'].prob.iloc[2*a + g]
+            axs[a, g].plot(t_plot, len(t_plot) * [100*target], label = 'STRIVE', linestyle = 'dashed', color = 'black')
+            axs[a, g].plot(t_plot, testing[:, ii], label = 'Total')
+            axs[a, g].plot(t_plot, testing[:, ii + 1], label = 'Symptoms')
+            axs[a, g].plot(t_plot, testing[:, ii + 2], label = 'Background')
+            axs[a, g].plot(t_plot, testing[:, ii + 3], label = 'Contact tracing')
+            ii = ii + 4
+            
+            
+    # Label graph
+    axs[0, 1].set_title('Males')
+    axs[0, 0].set_title('Females')
+    axs[0, 0].set_ylabel('16-19')
+    axs[1, 0].set_ylabel('20-24')
+    axs[2, 0].set_ylabel('25-29')
+    axs[3, 0].set_ylabel('30-34')
+    fig.text(0.5, 0.01, 'Time Since Start of Vaccination Program (days)', ha='center')
+    fig.text(-0.02, 0.5, 'Proportion of Sub-Population (%)', va='center', rotation='vertical')
+    axs[3, 1].legend(loc='upper center', ncol=6, bbox_to_anchor=(-0.1, -0.5), fancybox=True)
+    
+    
+    # Save output
+    plt.savefig(out_dir + 'graph_age_gender_test.png', bbox_inches='tight')
     plt.close()
 
 
+    #%% SUB_POPULATION VACCINATION
+    
+    
+    # Set_plotup graph
+    fig, axs = plt.subplots(4, 2, figsize = [12, 8])
+    fig.tight_layout(rect=[0, 0.03, 1, 0.95])
+    plt.suptitle('Ground-Truth Vaccination Rates (Simulation ' + str(sim) + ')')
+    
+    
+    # Plot items
+    ii = 0
+    for a in [0, 1, 2, 3]:
+        for g in [0, 1]:
+            axs[a, g].plot(t_plot, vax[:, ii], label = 'Overall')
+            axs[a, g].plot(t_plot, vax[:, ii + 1], label = 'Background Testing')
+            axs[a, g].plot(t_plot, vax[:, ii + 2], label = 'Sexual Debut')
+            axs[a, g].plot(t_plot, vax[:, ii + 3], label = 'Cohort Targeting')
+            ii = ii + 4
+            
+            
+    # Label graph
+    axs[0, 1].set_title('Males')
+    axs[0, 0].set_title('Females')
+    axs[0, 0].set_ylabel('16-19')
+    axs[1, 0].set_ylabel('20-24')
+    axs[2, 0].set_ylabel('25-29')
+    axs[3, 0].set_ylabel('30-34')
+    fig.text(0.5, 0.01, 'Time Since Start of Vaccination Program (days)', ha='center')
+    fig.text(-0.02, 0.5, 'Proportion of Sub-Population (%)', va='center', rotation='vertical')
+    axs[3, 1].legend(loc='upper center', ncol=6, bbox_to_anchor=(-0.1, -0.5), fancybox=True)
+    
+    
+    # Save output
+    plt.savefig(out_dir + 'graph_age_gender_vax.png', bbox_inches='tight')
+    plt.close()
+    
+    
     # Done
     return None
 
 
 
 
-# #%% NG MOD progress_state_of_infection()
-# # PROGRESS THE STATE OF INFECTION
-# # This is almost identical to the version ng.progress_state_of_infection()
-# # except that it runs vac.progress_state_of_vaccination() at the end.
-# # I've removed this from the code but not deleted it yet.
-# #
-# #
-# # Simply checks the duration of each compartment and progresses the
-# # individual if the duration is up.
-# #
-# #
-# # INPUT
-# #   meta, t
-# #
-# # OUTPUT
-# #   meta
-# #
-# #
+#%% REMOVED set_function_for_updating_infections()
+# Function was retired because the who things became unnecessary when I
+# finished witht he testing phase.
+#
+#
+# Top-level function which handles how the vaccine parameters
+# are interpreted by the simulation code
+#
+#
+# def set_function_for_updating_infections(vax_parameters):
+
+    
+#     ##########################################
+#     ##  ALL EFFECTS WITH DEPLOYMENT MODE 0  ##
+#     ##########################################
+    
+    
+#     # Where distribution occurrs during treatment
+#     if vax_parameters['deployment'] == 0:
+
+
+#         # Where the effect is total immunity
+#         if vax_parameters['effect'] == 0:
+
+
+#             # Situation where vaccinations given during treatment and makes people immune
+#             def update_infections(t, pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix):
+#                 meta = progress_state_of_vaccination(meta, t)
+#                 meta = ng.new_infections(pop_parameters, inf_parameters, meta, partner_matrix, t, 
+#                                          trans_prob_fun = vaccine_reduced_infection_prob, 
+#                                          vax_parameters = vax_parameters)
+#                 meta = ng.progress_state_of_infection(meta, t)
+#                 meta = progress_state_of_vaccination(meta, t)
+#                 meta = seek_treatment(pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix, t)
+#                 return meta
+
+
+#         # Where the effect is to reduce transmission
+#         elif vax_parameters['effect'] == 1:
+
+
+#             # Situation where vaccines given during treatment and result is to
+#             # decrease transmission probability
+#             def update_infections(t, pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix):
+#                 meta = progress_state_of_vaccination(meta, t)
+#                 meta = ng.new_infections(pop_parameters, inf_parameters, meta, partner_matrix, t, 
+#                                          trans_prob_fun = vaccine_reduced_trans_prob, 
+#                                          vax_parameters = vax_parameters)
+#                 meta = ng.progress_state_of_infection(meta, t)
+#                 meta = progress_state_of_vaccination(meta, t)
+#                 meta = seek_treatment(pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix, t)
+#                 return meta
+
+
+#         # Where the effect is to reduce symptoms
+#         elif vax_parameters['effect'] == 2:
+
+
+#             # Situation where vaccines given during treatment and result in
+#             # people being more likely to be asymptomatic
+#             def update_infections(t, pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix):
+#                 meta = progress_state_of_vaccination(meta, t)
+#                 meta = ng.new_infections(pop_parameters, inf_parameters, meta, partner_matrix, t, 
+#                                          symptoms_prob = symptoms_vax,
+#                                          vax_parameters = vax_parameters)
+#                 meta = ng.progress_state_of_infection(meta, t)
+#                 meta = progress_state_of_vaccination(meta, t)
+#                 meta = seek_treatment(pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix, t)
+#                 return meta
+
+
+#         # Where the effect is the reduce the duration of infection
+#         elif vax_parameters['effect'] == 3:
+
+
+#             # Situation where vaccines given during treatment and result in
+#             # people having a shorter duration of infection
+#             def update_infections(t, pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix):
+#                 meta = progress_state_of_vaccination(meta, t)
+#                 meta = ng.new_infections(pop_parameters, inf_parameters, meta, partner_matrix, t, 
+#                                          duration_mod = duration_vax,
+#                                          vax_parameters = vax_parameters)
+#                 meta = ng.progress_state_of_infection(meta, t)
+#                 meta = progress_state_of_vaccination(meta, t)
+#                 meta = seek_treatment(pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix, t)
+#                 return meta
+            
+            
+#         # Where the effect includes all of the above
+#         elif vax_parameters['effect'] == 4:
+            
+            
+#             # Situation where vaccines have a combination of all of the
+#             # above effects
+#             def update_infections(t, pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix):
+#                 meta = progress_state_of_vaccination(meta, t)
+#                 meta = ng.new_infections(pop_parameters, inf_parameters, meta, partner_matrix, t, 
+#                                          trans_prob_fun = vaccine_reduced_trans_and_inf_prob, 
+#                                          symptoms_prob = symptoms_vax,
+#                                          duration_mod = duration_vax,
+#                                          vax_parameters = vax_parameters)
+#                 meta = ng.progress_state_of_infection(meta, t)
+#                 meta = progress_state_of_vaccination(meta, t)
+#                 meta = seek_treatment(pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix, t)
+#                 return meta
+            
+            
+#     ##########################################
+#     ##  ALL EFFECTS WITH DEPLOYMENT MODE 1  ##
+#     ##########################################
+    
+    
+#     # Where distribution occurs at the age of 16
+#     elif vax_parameters['deployment'] == 1:
+
+
+#         # Where the effect is total immunity
+#         if vax_parameters['effect'] == 0:
+
+
+#             # Situation where vaccinations given during treatment and makes people immune
+#             def update_infections(t, pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix):
+#                 meta = vax_at_debut(vax_parameters, meta, t)
+#                 meta = progress_state_of_vaccination(meta, t)
+#                 meta = ng.new_infections(pop_parameters, inf_parameters, meta, partner_matrix, t, 
+#                                          trans_prob_fun = vaccine_reduced_infection_prob, 
+#                                          vax_parameters = vax_parameters)
+#                 meta = ng.progress_state_of_infection(meta, t)
+#                 meta = progress_state_of_vaccination(meta, t)
+#                 meta = ng.seek_treatment(pop_parameters, inf_parameters, meta, partner_matrix, t)
+#                 return meta
+
+
+#         # Where the effect is to reduce transmission
+#         elif vax_parameters['effect'] == 1:
+
+
+#             # Situation where vaccines given during treatment and result is to
+#             # decrease transmission probability
+#             def update_infections(t, pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix):
+#                 meta = vax_at_debut(vax_parameters, meta, t)
+#                 meta = progress_state_of_vaccination(meta, t)
+#                 meta = ng.new_infections(pop_parameters, inf_parameters, meta, partner_matrix, t, 
+#                                          trans_prob_fun = vaccine_reduced_trans_prob, 
+#                                          vax_parameters = vax_parameters)
+#                 meta = ng.progress_state_of_infection(meta, t)
+#                 meta = progress_state_of_vaccination(meta, t)
+#                 meta = ng.seek_treatment(pop_parameters, inf_parameters, meta, partner_matrix, t)
+#                 return meta
+
+
+#         # Where the effect is to reduce symptoms
+#         elif vax_parameters['effect'] == 2:
+
+
+#             # Situation where vaccines given during treatment and result in
+#             # people being more likely to be asymptomatic
+#             def update_infections(t, pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix):
+#                 meta = vax_at_debut(vax_parameters, meta, t)
+#                 meta = progress_state_of_vaccination(meta, t)
+#                 meta = ng.new_infections(pop_parameters, inf_parameters, meta, partner_matrix, t, 
+#                                          symptoms_prob = symptoms_vax,
+#                                          vax_parameters = vax_parameters)
+#                 meta = ng.progress_state_of_infection(meta, t)
+#                 meta = progress_state_of_vaccination(meta, t)
+#                 meta = ng.seek_treatment(pop_parameters, inf_parameters, meta, partner_matrix, t)
+#                 return meta
+
+
+#         # Where the effect is the reduce the duration of infection
+#         elif vax_parameters['effect'] == 3:
+
+
+#             # Situation where vaccines given during treatment and result in
+#             # people having a shorter duration of infection
+#             def update_infections(t, pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix):
+#                 meta = vax_at_debut(vax_parameters, meta, t)
+#                 meta = progress_state_of_vaccination(meta, t)
+#                 meta = ng.new_infections(pop_parameters, inf_parameters, meta, partner_matrix, t, 
+#                                          duration_mod = duration_vax,
+#                                          vax_parameters = vax_parameters)
+#                 meta = ng.progress_state_of_infection(meta, t)
+#                 meta = progress_state_of_vaccination(meta, t)
+#                 meta = ng.seek_treatment(pop_parameters, inf_parameters, meta, partner_matrix, t)
+#                 return meta
+            
+            
+#         # Where the effect includes all of the above
+#         elif vax_parameters['effect'] == 4:
+            
+            
+#             # Situation where vaccines have a combination of all of the
+#             # above effects
+#             def update_infections(t, pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix):
+#                 meta = vax_at_debut(vax_parameters, meta, t)
+#                 meta = progress_state_of_vaccination(meta, t)
+#                 meta = ng.new_infections(pop_parameters, inf_parameters, meta, partner_matrix, t, 
+#                                          trans_prob_fun = vaccine_reduced_trans_and_inf_prob, 
+#                                          symptoms_prob = symptoms_vax,
+#                                          duration_mod = duration_vax,
+#                                          vax_parameters = vax_parameters)
+#                 meta = ng.progress_state_of_infection(meta, t)
+#                 meta = progress_state_of_vaccination(meta, t)
+#                 meta = ng.seek_treatment(pop_parameters, inf_parameters, meta, partner_matrix, t)
+#                 return meta
+            
+            
+#     ##########################################
+#     ##  ALL EFFECTS WITH DEPLOYMENT MODE 2  ##
+#     ##########################################
+    
+    
+#     # Where distribution occurs at the age of 16
+#     elif vax_parameters['deployment'] == 2:
+
+
+#         # Where the effect is total immunity
+#         if vax_parameters['effect'] == 0:
+
+
+#             # Situation where vaccinations given during treatment and makes people immune
+#             def update_infections(t, pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix):
+#                 meta = vax_by_targets(vax_parameters, meta, t)
+#                 meta = progress_state_of_vaccination(meta, t)
+#                 meta = ng.new_infections(pop_parameters, inf_parameters, meta, partner_matrix, t, 
+#                                          trans_prob_fun = vaccine_reduced_infection_prob, 
+#                                          vax_parameters = vax_parameters)
+#                 meta = ng.progress_state_of_infection(meta, t)
+#                 meta = progress_state_of_vaccination(meta, t)
+#                 meta = ng.seek_treatment(pop_parameters, inf_parameters, meta, partner_matrix, t)
+#                 return meta
+
+
+#         # Where the effect is to reduce transmission
+#         elif vax_parameters['effect'] == 1:
+
+
+#             # Situation where vaccines given during treatment and result is to
+#             # decrease transmission probability
+#             def update_infections(t, pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix):
+#                 meta = vax_by_targets(vax_parameters, meta, t)
+#                 meta = progress_state_of_vaccination(meta, t)
+#                 meta = ng.new_infections(pop_parameters, inf_parameters, meta, partner_matrix, t, 
+#                                          trans_prob_fun = vaccine_reduced_trans_prob, 
+#                                          vax_parameters = vax_parameters)
+#                 meta = ng.progress_state_of_infection(meta, t)
+#                 meta = progress_state_of_vaccination(meta, t)
+#                 meta = ng.seek_treatment(pop_parameters, inf_parameters, meta, partner_matrix, t)
+#                 return meta
+
+
+#         # Where the effect is to reduce symptoms
+#         elif vax_parameters['effect'] == 2:
+
+
+#             # Situation where vaccines given during treatment and result in
+#             # people being more likely to be asymptomatic
+#             def update_infections(t, pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix):
+#                 meta = vax_by_targets(vax_parameters, meta, t)
+#                 meta = progress_state_of_vaccination(meta, t)
+#                 meta = ng.new_infections(pop_parameters, inf_parameters, meta, partner_matrix, t, 
+#                                          symptoms_prob = symptoms_vax,
+#                                          vax_parameters = vax_parameters)
+#                 meta = ng.progress_state_of_infection(meta, t)
+#                 meta = progress_state_of_vaccination(meta, t)
+#                 meta = ng.seek_treatment(pop_parameters, inf_parameters, meta, partner_matrix, t)
+#                 return meta
+
+
+#         # Where the effect is the reduce the duration of infection
+#         elif vax_parameters['effect'] == 3:
+
+
+#             # Situation where vaccines given during treatment and result in
+#             # people having a shorter duration of infection
+#             def update_infections(t, pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix):
+#                 meta = vax_by_targets(vax_parameters, meta, t)
+#                 meta = progress_state_of_vaccination(meta, t)
+#                 meta = ng.new_infections(pop_parameters, inf_parameters, meta, partner_matrix, t, 
+#                                          duration_mod = duration_vax,
+#                                          vax_parameters = vax_parameters)
+#                 meta = ng.progress_state_of_infection(meta, t)
+#                 meta = progress_state_of_vaccination(meta, t)
+#                 meta = ng.seek_treatment(pop_parameters, inf_parameters, meta, partner_matrix, t)
+#                 return meta
+            
+            
+#         # Where the effect includes all of the above
+#         elif vax_parameters['effect'] == 4:
+            
+            
+#             # Situation where vaccines have a combination of all of the
+#             # above effects
+#             def update_infections(t, pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix):
+#                 meta = vax_by_targets(vax_parameters, meta, t)
+#                 meta = progress_state_of_vaccination(meta, t)
+#                 meta = ng.new_infections(pop_parameters, inf_parameters, meta, partner_matrix, t, 
+#                                          trans_prob_fun = vaccine_reduced_trans_and_inf_prob, 
+#                                          symptoms_prob = symptoms_vax,
+#                                          duration_mod = duration_vax,
+#                                          vax_parameters = vax_parameters)
+#                 meta = ng.progress_state_of_infection(meta, t)
+#                 meta = progress_state_of_vaccination(meta, t)
+#                 meta = ng.seek_treatment(pop_parameters, inf_parameters, meta, partner_matrix, t)
+#                 return meta
+            
+            
+#     ##########################################
+#     ##  ALL EFFECTS WITH DEPLOYMENT MODE 3  ##
+#     ##########################################
+    
+    
+#     # Where distribution occurs at the age of 16
+#     elif vax_parameters['deployment'] == 3:
+
+
+#         # Where the effect is total immunity
+#         if vax_parameters['effect'] == 0:
+
+
+#             # Situation where vaccinations given during treatment and makes people immune
+#             def update_infections(t, pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix):
+#                 meta = vax_at_debut(vax_parameters, meta, t)
+#                 meta = vax_by_targets(vax_parameters, meta, t)
+#                 meta = progress_state_of_vaccination(meta, t)
+#                 meta = ng.new_infections(pop_parameters, inf_parameters, meta, partner_matrix, t, 
+#                                          trans_prob_fun = vaccine_reduced_infection_prob, 
+#                                          vax_parameters = vax_parameters)
+#                 meta = ng.progress_state_of_infection(meta, t)
+#                 meta = progress_state_of_vaccination(meta, t)
+#                 meta = seek_treatment(pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix, t)
+#                 return meta
+
+
+#         # Where the effect is to reduce transmission
+#         elif vax_parameters['effect'] == 1:
+
+
+#             # Situation where vaccines given during treatment and result is to
+#             # decrease transmission probability
+#             def update_infections(t, pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix):
+#                 meta = vax_at_debut(vax_parameters, meta, t)
+#                 meta = vax_by_targets(vax_parameters, meta, t)
+#                 meta = progress_state_of_vaccination(meta, t)
+#                 meta = ng.new_infections(pop_parameters, inf_parameters, meta, partner_matrix, t, 
+#                                          trans_prob_fun = vaccine_reduced_trans_prob, 
+#                                          vax_parameters = vax_parameters)
+#                 meta = ng.progress_state_of_infection(meta, t)
+#                 meta = progress_state_of_vaccination(meta, t)
+#                 meta = seek_treatment(pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix, t)
+#                 return meta
+
+
+#         # Where the effect is to reduce symptoms
+#         elif vax_parameters['effect'] == 2:
+
+
+#             # Situation where vaccines given during treatment and result in
+#             # people being more likely to be asymptomatic
+#             def update_infections(t, pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix):
+#                 meta = vax_at_debut(vax_parameters, meta, t)
+#                 meta = vax_by_targets(vax_parameters, meta, t)
+#                 meta = progress_state_of_vaccination(meta, t)
+#                 meta = ng.new_infections(pop_parameters, inf_parameters, meta, partner_matrix, t, 
+#                                          symptoms_prob = symptoms_vax,
+#                                          vax_parameters = vax_parameters)
+#                 meta = ng.progress_state_of_infection(meta, t)
+#                 meta = progress_state_of_vaccination(meta, t)
+#                 meta = seek_treatment(pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix, t)
+#                 return meta
+
+
+#         # Where the effect is the reduce the duration of infection
+#         elif vax_parameters['effect'] == 3:
+
+
+#             # Situation where vaccines given during treatment and result in
+#             # people having a shorter duration of infection
+#             def update_infections(t, pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix):
+#                 meta = vax_at_debut(vax_parameters, meta, t)
+#                 meta = vax_by_targets(vax_parameters, meta, t)
+#                 meta = progress_state_of_vaccination(meta, t)
+#                 meta = ng.new_infections(pop_parameters, inf_parameters, meta, partner_matrix, t, 
+#                                          duration_mod = duration_vax,
+#                                          vax_parameters = vax_parameters)
+#                 meta = ng.progress_state_of_infection(meta, t)
+#                 meta = progress_state_of_vaccination(meta, t)
+#                 meta = seek_treatment(pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix, t)
+#                 return meta
+            
+            
+#         # Where the effect includes all of the above
+#         elif vax_parameters['effect'] == 4:
+            
+            
+#             # Situation where vaccines have a combination of all of the
+#             # above effects
+#             def update_infections(t, pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix):
+#                 meta = vax_at_debut(vax_parameters, meta, t)
+#                 meta = vax_by_targets(vax_parameters, meta, t)
+#                 meta = progress_state_of_vaccination(meta, t)
+#                 meta = ng.new_infections(pop_parameters, inf_parameters, meta, partner_matrix, t, 
+#                                          trans_prob_fun = vaccine_reduced_trans_and_inf_prob, 
+#                                          symptoms_prob = symptoms_vax,
+#                                          duration_mod = duration_vax,
+#                                          vax_parameters = vax_parameters)
+#                 meta = ng.progress_state_of_infection(meta, t)
+#                 meta = progress_state_of_vaccination(meta, t)
+#                 meta = seek_treatment(pop_parameters, inf_parameters, vax_parameters, meta, partner_matrix, t)
+#                 return meta
+
+    
+#     # Done
+#     return update_infections
+
+
+#%% REMOVED progress_state_of_infection()
+# Function was retired by some nifty coding, but it's here in case I still need it.
+#
+# PROGRESS THE STATE OF INFECTION
+# This is almost identical to the version ng.progress_state_of_infection()
+# except that it runs vac.progress_state_of_vaccination() at the end.
+# I've removed this from the code but not deleted it yet.
+#
+#
+# Simply checks the duration of each compartment and progresses the
+# individual if the duration is up.
+#
+#
+# INPUT
+#   meta, t
+#
+# OUTPUT
+#   meta
+#
+#
 # def progress_state_of_infection(meta, t):
 
 

@@ -198,7 +198,7 @@ def setup_data(scenario = 1, parameter_no = 0, run_mode = 'serial', inf_param_se
                                                          partner_matrix, 
                                                          0)
     
-        
+    
     # Done
     return sim_parameters, pop_parameters, prt_parameters, inf_parameters, meta, partner_expire, partner_matrix, population_no
 
@@ -259,7 +259,7 @@ def setup_transmission_parameters(set = 'default', scenario = 3, parameter_no = 
 
 
         # Format the parameters
-        ( print('Infection parameters: calibrated (' + str(parameter_no) + ')') if run_mode == 'serial' else [] )
+        ( print('Infection parameters: calibrated (' + str(int(calib_param.set)) + ')') if run_mode == 'serial' else [] )
         parameters = parse_calibration_transmission_parameters(calib_param, parameter_no, set)
         
         
@@ -483,7 +483,7 @@ def parse_population_data(scenario = 1, run_mode = run_mode, pop_set = 'default'
         
         
         # Read in meta data from calibration run
-        out_dir = 'simulations/calibration/scenario_' + str(scenario) + '/simulation_' + str(inf_parameters['parameter_no']) + '_'
+        out_dir = 'simulations/calibration_start_files/scenario_' + str(scenario) + '/simulation_' + str(inf_parameters['parameter_no']) + '_'
         with open(out_dir + 'output_environment.pkl', 'rb') as f:
             env = pickle.load(f)
         
@@ -503,6 +503,7 @@ def parse_population_data(scenario = 1, run_mode = run_mode, pop_set = 'default'
         if 'boosted' not in meta.columns:
             meta.loc[:, 'boosted'] = False
             meta.loc[:, 'booster_t1'] = float("inf")
+            meta.loc[:, 'vaccine_source'] = int(0)
         
         
     

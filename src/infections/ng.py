@@ -510,7 +510,7 @@ def progress_state_of_infection(meta, t):
 #    meta
 #
 #
-def seek_treatment(pop_parameters, parameters, meta, partner_matrix, t, return_treated_ids = False):
+def seek_treatment(pop_parameters, parameters, meta, partner_matrix, t, return_tested_ids = False, project = False):
 
 
     ###############
@@ -533,26 +533,39 @@ def seek_treatment(pop_parameters, parameters, meta, partner_matrix, t, return_t
     
     
     # BACKGROUND TESTING
-
+        
 
     # Determine if anyone is to get background tested today
-    test_background = np.array(list(), dtype='int64')
     rates = pop_parameters['testing_rates']
+    test_background = np.array(list(), dtype='int64')
     for age in [0, 1, 2, 3, 4]:
         for gender in [0, 1]:
-
             
-            # Count up the proportion of the population that has been tested in the last 12 months
+            
+            # Pull out the pop who haven't tested recently
             who = meta.loc[(meta.age_group == age) & (meta.gender == gender), :]
             last_365 = (t - who.test_time_last) <= 365
-            # test_reason = who.test_reason_last != int(2)
-            # prop = (np.sum(test_reason & test_time))/max(len(who), 1)
-            prop = (np.sum(last_365))/max(len(who), 1)
 
-
-            # Calculate the current shortfall proportion
-            background = rates.prob[(rates.age_group == age) & (rates.gender == gender)].values[0] - prop
-            background = max(0, background/(7))
+            
+            # Backgorund testing rates vary during calibration but are held
+            # constant during vaccine scenarios
+            if project:
+                
+                
+                # If projecting, just keep the background testing rate constant
+                background = rates.prob[(rates.age_group == age) & (rates.gender == gender)].values[0]/365
+                
+                
+            else:
+                
+                
+                # Count up the proportion of the population that has been tested in the last 12 months
+                prop = (np.sum(last_365))/max(len(who), 1)
+    
+    
+                # Calculate the current shortfall proportion
+                background = rates.prob[(rates.age_group == age) & (rates.gender == gender)].values[0] - prop
+                background = max(0, background/(7))
 
 
             # Sample new people to test
@@ -622,8 +635,9 @@ def seek_treatment(pop_parameters, parameters, meta, partner_matrix, t, return_t
 
     # Added this in so that the function will return the variable treat
     # if it's needed by the vaccine code
-    if return_treated_ids:
-        return meta, treat
+    if return_tested_ids:
+        test = np.append(test, treat_part)
+        return meta, test
     else:
         return meta
 
@@ -675,6 +689,7 @@ def initilise_infection_trackers(n_days):
 #
 def update_infection_trackers(t, pop_parameters, meta, inf_tracker, t0_sim):
 
+    
     # Update population size trackers
     temp1 = inf_tracker['pop_size_age_risk']
     temp2 = inf_tracker['pop_size_age_gender']
@@ -689,6 +704,7 @@ def update_infection_trackers(t, pop_parameters, meta, inf_tracker, t0_sim):
     inf_tracker.update({'pop_size_age_risk': temp1})
     inf_tracker.update({'pop_size_age_gender': temp2})
 
+
     # Update aggregate infection graph
     yt = inf_tracker['aggregate_infections']
     yt.at[t, "S"] = np.sum(pop_parameters['lookup']['SS'])
@@ -697,19 +713,14 @@ def update_infection_trackers(t, pop_parameters, meta, inf_tracker, t0_sim):
     yt.at[t, "R"] = np.sum(pop_parameters['lookup']['SR'])
     yt.at[t, "T"] = np.sum(pop_parameters['lookup']['ST'])
     yt.at[t, "V"] = np.sum(pop_parameters['lookup']['SV'])
-    yt.at[t, "site0s"] = np.sum(
-        pop_parameters['lookup']['I01'] & meta.site0_symptoms)
-    yt.at[t, "site1s"] = np.sum(
-        pop_parameters['lookup']['I11'] & meta.site1_symptoms)
-    yt.at[t, "site2s"] = np.sum(
-        pop_parameters['lookup']['I21'] & meta.site2_symptoms)
-    yt.at[t, "site0a"] = np.sum(
-        pop_parameters['lookup']['I01'] & ~meta.site0_symptoms)
-    yt.at[t, "site1a"] = np.sum(
-        pop_parameters['lookup']['I11'] & ~meta.site1_symptoms)
-    yt.at[t, "site2a"] = np.sum(
-        pop_parameters['lookup']['I21'] & ~meta.site2_symptoms)
+    yt.at[t, "site0s"] = np.sum(pop_parameters['lookup']['I01'] & meta.site0_symptoms)
+    yt.at[t, "site1s"] = np.sum(pop_parameters['lookup']['I11'] & meta.site1_symptoms)
+    yt.at[t, "site2s"] = np.sum(pop_parameters['lookup']['I21'] & meta.site2_symptoms)
+    yt.at[t, "site0a"] = np.sum(pop_parameters['lookup']['I01'] & ~meta.site0_symptoms)
+    yt.at[t, "site1a"] = np.sum(pop_parameters['lookup']['I11'] & ~meta.site1_symptoms)
+    yt.at[t, "site2a"] = np.sum(pop_parameters['lookup']['I21'] & ~meta.site2_symptoms)
     inf_tracker.update({'yt': yt})
+
 
     # Update infectious state by age and gender
     temp = inf_tracker['infections_state_age_gender']
@@ -722,6 +733,7 @@ def update_infection_trackers(t, pop_parameters, meta, inf_tracker, t0_sim):
                 ii = ii + 1
     inf_tracker.update({'infections_state_age_gender': temp})
 
+
     # Update infectious state by age and risk
     temp = inf_tracker['infections_state_age_risk']
     ii = 0
@@ -732,6 +744,7 @@ def update_infection_trackers(t, pop_parameters, meta, inf_tracker, t0_sim):
                     pop_parameters['lookup']['S' + state + 'RA' + str(risk) + str(age)])
                 ii = ii + 1
     inf_tracker.update({'infections_state_age_risk': temp})
+
 
     # Update infections by site for age and gender
     temp = inf_tracker['infections_site_age_gender']
@@ -751,6 +764,7 @@ def update_infection_trackers(t, pop_parameters, meta, inf_tracker, t0_sim):
             ii = ii + 7
     inf_tracker.update({'infections_site_age_gender': temp})
 
+
     # Update infections by site for age and risk
     temp = inf_tracker['infections_site_age_risk']
     ii = 0
@@ -768,6 +782,7 @@ def update_infection_trackers(t, pop_parameters, meta, inf_tracker, t0_sim):
             temp[t, ii + 6] = np.sum(site0 & site1 & site2)
             ii = ii + 7
     inf_tracker.update({'infections_site_age_risk': temp})
+
 
     # Update infections by site and symptoms age and gender
     temp = inf_tracker['infections_site_age_gender_symptom']
@@ -793,6 +808,7 @@ def update_infection_trackers(t, pop_parameters, meta, inf_tracker, t0_sim):
             ii = ii + 8
     inf_tracker.update({'infections_site_age_gender_symptom': temp})
 
+
     # Update testing tracker
     temp = inf_tracker['track_treat']
     ii = 0
@@ -816,6 +832,7 @@ def update_infection_trackers(t, pop_parameters, meta, inf_tracker, t0_sim):
             temp[t, ii+3] = (in_count3)/n
             ii = ii + 4
     inf_tracker.update({'track_treat': temp})
+
 
     return inf_tracker
 
@@ -918,8 +935,7 @@ def make_infection_graphs(tt, inf_tracker, pop_parameters, save_loc='graphs/outp
     ax[4, 1]. set_xlabel('Day')
     ax[0, 0].set_title('Low-Risk')
     ax[0, 1].set_title('High-Risk')
-    ax[4, 1].legend(loc='upper center', ncol=6,
-                    bbox_to_anchor=(-0.1, -0.2), fancybox=True)
+    ax[4, 1].legend(loc='upper center', ncol=6, bbox_to_anchor=(-0.1, -0.2), fancybox=True)
 
     # Save graph
     fig.savefig(save_loc + 'infections_prev_by_age_and_risk.png', dpi=200)

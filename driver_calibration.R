@@ -56,11 +56,12 @@ data =
          prev_f3 = NA,
          test_tot = NA,
          test_m = NA,
-         test_f = NA)
+         test_f = NA, 
+         not_equlib = TRUE)
 
 
 # Read in data and determine the equilibrium point
-scenario = 3
+scenario = 1
 pb = progress_bar$new(total = nrow(data))
 for (i in 0:(nrow(data)-1)){
   pb$tick()
@@ -126,6 +127,7 @@ for (i in 0:(nrow(data)-1)){
 
 
 # Drop incomplete runs
+cat(str_c(sum(is.na(data$prev_f)), ' (', 100*sum(is.na(data$prev_f))/nrow(data), '%) runs not finished'))
 data = 
   data %>%
   filter(!is.na(prev_tot))
@@ -275,10 +277,10 @@ data =
 
 # Make a graph of all RSS results
 data %>%
-  filter(!is.na(prev_ss)) %>%
-  ggplot(aes(x=prev_ss)) +
+  filter(!is.na(test_ss)) %>%
+  ggplot(aes(x=test_ss)) +
   geom_histogram(bins = 40) +
-  labs(x = 'Mean Residual Sum of Squares Across Prevalence Categories',
+  labs(x = 'Mean Residual Sum of Squares',
        y = 'Count',
        title = 'Distribution of the Goodness of Fit for all Simulations')
 
@@ -422,7 +424,8 @@ data %>%
        y = 'Density',
        title = 'Analysis of Systematic Bias Within Prevalence Categories',
        fill = 'Is in top 50: ') +
-  theme(legend.position = 'bottom')
+  theme(legend.position = 'bottom') +
+  scale_x_continuous(limits = c(-10, 10))
 
 
 # Change target for plotting
@@ -485,6 +488,35 @@ data %>%
        fill = 'Is in top 50: ',
        title = 'Distribution of Sample Parameters Compared to Selected Parameters')
 
+
+###########################################################################
+##  MAKE A COPY OF THE CALIBRATION SIMS TO HELP WITH STORAGE MANAGEMENT  ##
+###########################################################################
+
+
+# Make a list of all the output file names
+fnames = list.files(str_c('simulations/calibration/scenario_', scenario, '/'))
+
+
+# Iterate over the chosen calibration sims
+pb = progress_bar$new(total = nrow(calibrated))
+for ( i in 1:nrow(calibrated) ){
+  pb$tick()
+  
+  
+  # Find all files to copy
+  from = str_c('simulations/calibration/scenario_', scenario, '/')
+  to = str_c('simulations/calibration_start_files/scenario_', scenario, '/')
+  to_copy = fnames[str_detect(fnames, str_c('simulation_', calibrated$set[i], '_'))]
+  
+  
+  # Copy over
+  for ( j in 1:length(fnames) ){
+    file.copy(str_c(from, to_copy[j]), 
+              str_c(to, to_copy[j]), 
+              overwrite = T, copy.mode = T, copy.date = T)
+  }
+}
 
 
 
