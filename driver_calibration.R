@@ -61,7 +61,7 @@ data =
 
 
 # Read in data and determine the equilibrium point
-scenario = 1
+scenario = 2
 pb = progress_bar$new(total = nrow(data))
 for (i in 0:(nrow(data)-1)){
   pb$tick()
@@ -301,6 +301,7 @@ write.csv(calibrated, str_c('simulations/calibrated_scenario_', scenario, '.csv'
 
 # Preallocate
 n = nrow(prev)
+n = 19
 prev_overall = array(0, c(n, 50))
 prev_m = array(0, c(n, 50))
 prev_f = array(0, c(n, 50))

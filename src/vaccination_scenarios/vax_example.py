@@ -59,7 +59,7 @@ vax_parameters = {
     
     # VACCINE DEPLOYMENT PARAMETERS
     'booster_delay': int(2),      # Baseline assumes no boosted vaccination
-    'p_test_to_vax': 0.05,               # Proportion of people tested who get vaccinated
+    'p_test_to_vax': 0.5,               # Proportion of people tested who get vaccinated
     'p_vax_16': 0.75,                   # Proportion of people vaccinated at sexual debut
     'prop_vax_0': 0,                  # Proportion of 16-19 year olds vaccinated
     'prop_vax_1': 0,                  # Proportion of 20-24 year olds vaccinated
