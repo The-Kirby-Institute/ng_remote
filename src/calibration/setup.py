@@ -144,8 +144,8 @@ def run_one_simulation(scenario = 1, parameter_no = 0, run_mode = run_mode):
             print('COMPLETE: scenario: ' + str(scenario) + ' - parameter set: ' + str(parameter_no) + ' - population: ' + str(population_no) + ' - runtime: ' + str(runtime) + ' min')
         else:
             print('Run completed in ' + str(runtime) + ' min\n')
-    
-    
+
+
     # Done!
     return None
 
@@ -497,8 +497,9 @@ def parse_population_data(scenario = 1, run_mode = run_mode, pop_set = 'default'
         meta = pd.read_feather(out_dir + 'output_meta.ftr')
         partner_expire = np.load(out_dir + 'output_partner_expire.npy')
         partner_matrix = np.load(out_dir + 'output_partner_matrix.npy')
-        
-        
+
+        meta.loc[(meta['orientation'] == 1) | (meta['orientation'] == 2), 'orientation'] = 0
+
         # Check for some new variables
         if 'boosted' not in meta.columns:
             meta.loc[:, 'boosted'] = False
