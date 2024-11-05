@@ -413,20 +413,20 @@ def initilise_orientation(meta_init, orientation_dist):
 
     # Individuals ages 16-19
     meta_init.loc[(meta_init.age_group == 0) & (meta_init.orientation <= orientation_dist.hetero.iloc[0]), 'orientation'] = 0
-    meta_init.loc[(meta_init.age_group == 0) & (meta_init.orientation <= orientation_dist.homo.iloc[0]) & (meta_init.orientation != 0), 'orientation'] = 1
-    meta_init.loc[(meta_init.age_group == 0) & (meta_init.orientation <= orientation_dist.bi.iloc[0]) & (meta_init.orientation != 0) & (meta_init.orientation != 1), 'orientation'] = 2
+    meta_init.loc[(meta_init.age_group == 0) & (meta_init.orientation <= orientation_dist.homo.iloc[0]) & (meta_init.orientation != 0), 'orientation'] = 0
+    meta_init.loc[(meta_init.age_group == 0) & (meta_init.orientation <= orientation_dist.bi.iloc[0]) & (meta_init.orientation != 0) & (meta_init.orientation != 1), 'orientation'] = 0
 
 
     # Individuals ages 20-24
     meta_init.loc[(meta_init.age_group == 1) & (meta_init.orientation <= orientation_dist.hetero.iloc[1]), 'orientation'] = 0
-    meta_init.loc[(meta_init.age_group == 1) & (meta_init.orientation <= orientation_dist.homo.iloc[1]) & (meta_init.orientation != 0), 'orientation'] = 1
-    meta_init.loc[(meta_init.age_group == 1) & (meta_init.orientation <= orientation_dist.bi.iloc[1]) & (meta_init.orientation != 0) & (meta_init.orientation != 1), 'orientation'] = 2
+    meta_init.loc[(meta_init.age_group == 1) & (meta_init.orientation <= orientation_dist.homo.iloc[1]) & (meta_init.orientation != 0), 'orientation'] = 0
+    meta_init.loc[(meta_init.age_group == 1) & (meta_init.orientation <= orientation_dist.bi.iloc[1]) & (meta_init.orientation != 0) & (meta_init.orientation != 1), 'orientation'] = 0
 
 
     # Individuals aged 25 and older
     meta_init.loc[(meta_init.age_group > 1) & (meta_init.orientation <= orientation_dist.hetero.iloc[2]), 'orientation'] = 0
-    meta_init.loc[(meta_init.age_group > 1) & (meta_init.orientation <= orientation_dist.homo.iloc[2]) & (meta_init.orientation != 0), 'orientation'] = 1
-    meta_init.loc[(meta_init.age_group > 1) & (meta_init.orientation <= orientation_dist.bi.iloc[2]) & (meta_init.orientation != 0) & (meta_init.orientation != 1), 'orientation'] = 2
+    meta_init.loc[(meta_init.age_group > 1) & (meta_init.orientation <= orientation_dist.homo.iloc[2]) & (meta_init.orientation != 0), 'orientation'] = 0
+    meta_init.loc[(meta_init.age_group > 1) & (meta_init.orientation <= orientation_dist.bi.iloc[2]) & (meta_init.orientation != 0) & (meta_init.orientation != 1), 'orientation'] = 0
 
 
     return meta_init

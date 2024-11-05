@@ -14,19 +14,21 @@ pd = import('pandas')
 
 
 # Read in all parameter sets
-data = 
+data =
   read.csv('simulations/parameters.csv') %>%
   as_tibble()
-
+#data_set2 = data %>% filter(symptoms_ural_male > 0.50 & symptoms_ural_male > symptoms_ural_female & symptoms_ural_female < 0.5)
+indices = which(data$symptoms_ural_male>0.5 & data$symptoms_ural_male>data$symptoms_ural_female & data$symptoms_ural_female<0.5)
+data_set2 <- data[indices, ]
 
 # Read in the target prevalence
-target = 
+target =
   read.csv('data/calibration_prevalence.csv') %>%
   as_tibble()
 
 
 # Read in the target testing rates
-target_test = 
+target_test =
   read.csv('data/testing_rates.csv') %>%
   as_tibble() %>%
   mutate(prob = 100 * prob,
@@ -40,9 +42,9 @@ target_test =
 
 
 # Initilise columns for computing prevalence
-data = 
-  data %>%
-  mutate(set = 0:(nrow(data)-1),
+data_set2 =
+  data_set2 %>%
+  mutate(set = indices,
          prev_tot = NA,
          prev_m = NA,
          prev_f = NA,
@@ -56,70 +58,70 @@ data =
          prev_f3 = NA,
          test_tot = NA,
          test_m = NA,
-         test_f = NA, 
+         test_f = NA,
          not_equlib = TRUE)
 
 
 # Read in data and determine the equilibrium point
-scenario = 2
-pb = progress_bar$new(total = nrow(data))
-for (i in 0:(nrow(data)-1)){
+scenario = 3
+pb = progress_bar$new(total = nrow(data_set2))
+for (i in indices-1){
   pb$tick()
-  
-  
+
+
   # Load simulation data
   file_name = str_c('simulations/calibration/scenario_', scenario, '/simulation_', i, '_output_prevalence.npy')
   file_name_2 = str_c('simulations/calibration/scenario_', scenario, '/simulation_', i, '_output_environment.pkl')
   if ( file.exists(file_name) ){
-    
-    
+
+
     # Load prevalence
     prev = np$load(file_name) %>% as_tibble()
     names(prev) = c('tot', 'm', 'f', 'm0', 'm1', 'm2', 'm3', 'm4', 'f0', 'f1', 'f2', 'f3', 'f4')
     prev = 100 * prev
-    
-    
+
+
     # Load testing rates
     test = 100 * pd$read_pickle(file_name_2)$tstt
 
-    
+
     # Look for the maximum t where the prevalence seems to have converged to equilibrium
     prev = prev[seq(round(nrow(prev)/2), nrow(prev), 50),]
     test = test[seq(round(nrow(test)/2), nrow(test), 50),]
     n = nrow(prev)
     prev$t = 1:n
     for ( t0 in 1:(n-10) ){
-      
-      
+
+
       # Fit a linear regression
       input_data = prev %>% mutate(t = t - t0)
       fit = lm('tot ~ 1 + t', data = input_data[t0:n, ])
-      
-      
+
+
       # Check to see if 0 is in the CI for the slope
       ci = confint(fit, 't', level = 0.95)
       if ( ci[1] < 0 ){
-        
-        
+
+
         # Compute the mean prevalence
         prev = prev[t0:n, ]
         test = test[t0:n, c(1, 5, 9)]
-        data$prev_tot[i+1] = mean(prev$tot)
-        data$prev_m[i+1] = mean(prev$m)
-        data$prev_f[i+1] = mean(prev$f)
-        data$prev_m0[i+1] = mean(prev$m0)
-        data$prev_m1[i+1] = mean(prev$m1)
-        data$prev_m2[i+1] = mean(prev$m2)
-        data$prev_m3[i+1] = mean(prev$m3)
-        data$prev_f0[i+1] = mean(prev$f0)
-        data$prev_f1[i+1] = mean(prev$f1)
-        data$prev_f2[i+1] = mean(prev$f2)
-        data$prev_f3[i+1] = mean(prev$f3)
-        data$test_tot[i+1] = mean(test[,1])
-        data$test_m[i+1] = mean(test[,2])
-        data$test_f[i+1] = mean(test[,3])
+        data_set2$prev_tot[i+1] = mean(prev$tot)
+        data_set2$prev_m[i+1] = mean(prev$m)
+        data_set2$prev_f[i+1] = mean(prev$f)
+        data_set2$prev_m0[i+1] = mean(prev$m0)
+        data_set2$prev_m1[i+1] = mean(prev$m1)
+        data_set2$prev_m2[i+1] = mean(prev$m2)
+        data_set2$prev_m3[i+1] = mean(prev$m3)
+        data_set2$prev_f0[i+1] = mean(prev$f0)
+        data_set2$prev_f1[i+1] = mean(prev$f1)
+        data_set2$prev_f2[i+1] = mean(prev$f2)
+        data_set2$prev_f3[i+1] = mean(prev$f3)
+        data_set2$test_tot[i+1] = mean(test[,1])
+        data_set2$test_m[i+1] = mean(test[,2])
+        data_set2$test_f[i+1] = mean(test[,3])
         break
-        
+
       }
     }
   }
@@ -127,14 +129,14 @@ for (i in 0:(nrow(data)-1)){
 
 
 # Drop incomplete runs
-cat(str_c(sum(is.na(data$prev_f)), ' (', 100*sum(is.na(data$prev_f))/nrow(data), '%) runs not finished'))
-data = 
-  data %>%
+cat(str_c(sum(is.na(data_set2$prev_f)), ' (', 100*sum(is.na(data_set2$prev_f))/nrow(data_set2), '%) runs not finished'))
+data_set2 =
+  data_set2 %>%
   filter(!is.na(prev_tot))
 
 
 # Summary of overall prevalence
-data %>%
+data_set2 %>%
   select(starts_with('prev') | starts_with('test')) %>%
   gather(series, prev) %>%
   ggplot(aes(x=prev)) +
@@ -151,9 +153,9 @@ data %>%
 
 
 # Compute correlation with different variables
-x = data %>% filter(!is.na(prev_tot)) %>% select(-starts_with('prev'), -starts_with('test'), -starts_with('mean'), -set)
-y = data %>% filter(!is.na(prev_tot)) %>% select(starts_with('prev'), starts_with('test'))
-out = tibble(var = names(x), 
+x = data_set2 %>% filter(!is.na(prev_tot)) %>% select(-starts_with('prev'), -starts_with('test'), -starts_with('mean'), -set)
+y = data_set2 %>% filter(!is.na(prev_tot)) %>% select(starts_with('prev'), starts_with('test'))
+out = tibble(var = names(x),
              cor_tot = NA,
              cor_m = NA,
              cor_f = NA,
@@ -218,7 +220,7 @@ out %>%
                          T ~ var),
          var = reorder(var, cor_tot)) %>%
   gather(type, val, -var) %>%
-  mutate(type = ordered(type, 
+  mutate(type = ordered(type,
                         levels=c('cor_tot', 'cor_m', 'cor_f', 'cor_m0', 'cor_m1', 'cor_m2', 'cor_m3', 'cor_f0', 'cor_f1', 'cor_f2', 'cor_f3', 'cor_ttot', 'cor_tm', 'cor_tf'),
                         labels=c('Overall', 'Males', 'Females', 'Male 16-19', 'Male 20-24', 'Male 25-29', 'Male 30-35', 'Female 16-19', 'Female 20-24', 'Female 25-29', 'Female 30-35', 'Test Overall', 'Test Males', 'Test Females')),
          # val = case_when(val > 0.2 ~ 0.2,
@@ -254,8 +256,8 @@ overall_weight = 1/11
 gender_weight = 1/11
 age_gender_weight_m = 1/11
 age_gender_weight_f = 1/11
-data = 
-  data %>%
+data_set2 =
+  data_set2 %>%
   mutate(prev_ss = (overall_weight * (prev_tot - target$tot)^2 +
                     gender_weight * (prev_m - target$m)^2 +
                     gender_weight * (prev_f - target$f)^2 +
@@ -276,7 +278,7 @@ data =
 
 
 # Make a graph of all RSS results
-data %>%
+data_set2 %>%
   filter(!is.na(test_ss)) %>%
   ggplot(aes(x=test_ss)) +
   geom_histogram(bins = 40) +
@@ -286,7 +288,7 @@ data %>%
 
 
 # Pull out the best 50
-calibrated = 
+calibrated =
   data %>%
   arrange(test_ss) %>%
   slice_head(n = 50)
@@ -314,7 +316,7 @@ for (j in 1:50){
   pb$tick()
   i = calibrated$set[j]
 
-  
+
   # Load prevalence data
   file_name = str_c('simulations/calibration/scenario_', scenario, '/simulation_', i, '_output_prevalence.npy')
   if ( file.exists(file_name) ){
@@ -324,7 +326,7 @@ for (j in 1:50){
     prev = prev[seq(2, nrow(prev), 50),]
     prev = 100 * prev
 
-    
+
     # Compute the average prevalence
     prev_overall[,j] = prev$tot
     prev_m[,j] = prev$m
@@ -394,7 +396,7 @@ prev_f %>%
 
 
 # Compute how good each parameter set is
-data %>%
+data_set2 %>%
   filter(!is.na(prev_tot)) %>%
   mutate(prev_tot = prev_tot - target$tot,
          prev_m = prev_m - target$m,
@@ -414,12 +416,12 @@ data %>%
   select(chosen, starts_with('prev'), starts_with('test'), -ends_with('ss')) %>%
   gather(case, val, -chosen) %>%
   mutate(cases = as.factor(case),
-         case = ordered(case, 
+         case = ordered(case,
                         levels=c('prev_tot', 'prev_m', 'prev_f', 'prev_m0', 'prev_m1', 'prev_m2', 'prev_m3', 'prev_f0', 'prev_f1', 'prev_f2', 'prev_f3', 'test_tot', 'test_m', 'test_f'),
                         labels=c('Overall', 'Males', 'Females', 'Male 16-19', 'Male 20-24', 'Male 25-29', 'Male 30-35', 'Female 16-19', 'Female 20-24', 'Female 25-29', 'Female 30-35', 'Test Overall', 'Test Male', 'Test Female'))) %>%
   ggplot(aes(fill = chosen, x = val)) +
   geom_vline(aes(xintercept = 0), lty = 'dashed') +
-  geom_density(alpha = 0.6) + 
+  geom_density(alpha = 0.6) +
   facet_wrap(~case) +
   labs(x = 'Distribution of Difference Between Simulated and STRIVE Prevalence',
        y = 'Density',
@@ -430,27 +432,27 @@ data %>%
 
 
 # Change target for plotting
-target_long = 
+target_long =
   target %>%
   gather(case, prev) %>%
-  mutate(case = ordered(case, 
+  mutate(case = ordered(case,
                         levels=c('tot', 'm', 'f', 'm0', 'm1', 'm2', 'm3', 'f0', 'f1', 'f2', 'f3'),
                         labels=c('Overall', 'Males', 'Females', 'Male 16-19', 'Male 20-24', 'Male 25-29', 'Male 30-35', 'Female 16-19', 'Female 20-24', 'Female 25-29', 'Female 30-35')))
 
 
 # Compute how good each parameter set is
-data %>%
+data_set2 %>%
   filter(!is.na(prev_tot)) %>%
   mutate(chosen = case_when(set %in% calibrated$set ~ T, T ~ F)) %>%
   select(chosen, starts_with('prev'), starts_with('test'), -ends_with('ss')) %>%
   gather(case, val, -chosen) %>%
   mutate(cases = as.factor(case),
-         case = ordered(case, 
+         case = ordered(case,
                         levels=c('prev_tot', 'prev_m', 'prev_f', 'prev_m0', 'prev_m1', 'prev_m2', 'prev_m3', 'prev_f0', 'prev_f1', 'prev_f2', 'prev_f3', 'test_tot', 'test_m', 'test_f'),
                         labels=c('Overall', 'Males', 'Females', 'Male 16-19', 'Male 20-24', 'Male 25-29', 'Male 30-35', 'Female 16-19', 'Female 20-24', 'Female 25-29', 'Female 30-35', 'Test Overall', 'test Male', 'Test Female'))) %>%
   ggplot(aes(fill = chosen, x = val)) +
   geom_vline(aes(xintercept = prev), target_long, lty = 'dashed') +
-  geom_density(alpha = 0.6) + 
+  geom_density(alpha = 0.6) +
   facet_wrap(~case) +
   labs(x = 'Distribution of Difference Between Simulated and STRIVE Prevalence',
        y = 'Density',
@@ -464,7 +466,7 @@ data %>%
 #######################################
 
 
-data %>%
+data_set2 %>%
   mutate(chosen = case_when(set %in% calibrated$set ~ T, T ~ F)) %>%
   select(-starts_with('prev'), -starts_with('test'), -set) %>%
   gather(param, val, -chosen) %>%
@@ -503,18 +505,18 @@ fnames = list.files(str_c('simulations/calibration/scenario_', scenario, '/'))
 pb = progress_bar$new(total = nrow(calibrated))
 for ( i in 1:nrow(calibrated) ){
   pb$tick()
-  
-  
+
+
   # Find all files to copy
   from = str_c('simulations/calibration/scenario_', scenario, '/')
   to = str_c('simulations/calibration_start_files/scenario_', scenario, '/')
   to_copy = fnames[str_detect(fnames, str_c('simulation_', calibrated$set[i], '_'))]
-  
-  
+
+
   # Copy over
   for ( j in 1:length(fnames) ){
-    file.copy(str_c(from, to_copy[j]), 
-              str_c(to, to_copy[j]), 
+    file.copy(str_c(from, to_copy[j]),
+              str_c(to, to_copy[j]),
               overwrite = T, copy.mode = T, copy.date = T)
   }
 }

@@ -50,7 +50,7 @@ from src.vaccination_scenarios.vax_example import vax_parameters
 
 
 # Set parameters
-run_mode = 'serial'
+run_mode = 'parallel'
 n_cores = min(16, vax_parameters['n_sims'])
 sim_run = list(range(0, vax_parameters['n_sims']))
 
@@ -59,8 +59,8 @@ sim_run = list(range(0, vax_parameters['n_sims']))
 
 # If running in serial
 if run_mode == 'serial':
-    
-    
+
+
     # Run all the sims
     for sim_no in sim_run:
         vax.run_vaccine_scenario(vax_parameters, sim_no, run_mode = 'serial')
@@ -70,19 +70,19 @@ if run_mode == 'serial':
 
 # If running in parallel
 if run_mode == 'parallel':
-    
-    
+
+
     # Define worker for running the simulation
     def worker(it):
         vax.run_vaccine_scenario(vax_parameters, it, run_mode = 'parallel')
-    
-    
+
+
     # Define pool handler
     def pool_handler():
         p = Pool(n_cores)
         p.map(worker, sim_run)
-    
-    
+
+
     # Batch scripts
     if __name__ == '__main__':
         pool_handler()
