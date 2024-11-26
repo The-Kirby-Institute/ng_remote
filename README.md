@@ -26,3 +26,20 @@ Use the R script `driver_calibration.R` to fit the model to the age and sex-spec
 
 ### Data
 Model parameterisation data is located in the `data` folder.
+
+### Contributors to this modelling project:
+
+- **Thilini Padeniya**  
+  Institute for Biomedicine and Glycomics, Griffith University
+- **Ben Hui**  
+  Kirby Institute, UNSW Sydney
+- **David Regan**  
+  Kirby Institute, UNSW Sydney
+- **James Wood**  
+  School of Population Health, UNSW Sydney
+- **Kate Seib**  
+  Institute for Biomedicine and Glycomics, Griffith University
+- **Nicolas Rebuli**  
+  School of Population Health/Kirby Institute, UNSW Sydney
+
+
