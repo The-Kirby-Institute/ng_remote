@@ -18,11 +18,23 @@ This repository contains an individual-based mathematical model of *Neisseria go
 ## Usage Instructions
 
 ### Model Fitting
-Use the R script `driver_calibration.R` to fit the model to the age and sex-specific prevalence reported in the [STRIVE study](http://doi.org/10.1136/sextrans-2014-051617).
+Use the R script `driver_calibration.R` to fit the model to the age and sex-specific prevalence reported in the [STRIVE Study](http://doi.org/10.1136/sextrans-2014-051617).
 
 ### Running Vaccination Scenarios
 1. Execute `driver_vaccine_scenario.py` to run vaccination scenarios.
 2. Define vaccination scenarios in `vax_example.py`.
 
 ### Data
-Model parameterisation data is located in the `data` folder.
+The model parameterisation data is located in the `data` folder.
+
+### Contributors to this Modelling Project:
+The code for this project was originally developed by **Nicolas Rebuli** (School of Population Health/Kirby Institute, UNSW Sydney) and later taken over and modified by **Thilini Padeniya** (Institute for Biomedicine and Glycomics, Griffith University).
+
+### Other Contributors:
+- **Ben Hui** (Kirby Institute, UNSW Sydney)
+- **David Regan** (Kirby Institute, UNSW Sydney)
+- **James Wood** (School of Population Health, UNSW Sydney)
+- **Kate Seib** (Institute for Biomedicine and Glycomics, Griffith University)
+
+
+
